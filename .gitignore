@@ -17,3 +17,7 @@ npm-debug.log*
 # OS / editor
 .DS_Store
 Thumbs.db
+
+# personal local-only files (keep on machine, never push)
+PROGRESS.md
+README.md
