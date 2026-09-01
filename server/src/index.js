@@ -28,6 +28,10 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', uptime: process.uptime() });
 });
 
+app.get('/api/version', (req, res) => {
+  res.json({ name: 'obts', version: '0.1.0' });
+});
+
 app.use('/api', routes);
 
 app.use(notFoundHandler);
