@@ -1,0 +1,28 @@
+{
+  "name": "projectobts-server",
+  "version": "0.1.0",
+  "description": "OBTS MERN - Express API server (auth module)",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "nodemon src/index.js",
+    "start": "node src/index.js",
+    "seed": "node src/seed/seed.js"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.4",
+    "morgan": "^1.12.0",
+    "zod": "^4.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14",
+    "supertest": "^7.2.2"
+  }
+}
