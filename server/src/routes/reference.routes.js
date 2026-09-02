@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { requireAuth } from '../middleware/auth.js';
 import Location from '../models/Location.js';
+import { busMeta } from '../domain/busmeta.js';
 
 const router = Router();
 
@@ -13,5 +14,9 @@ router.get(
     res.json({ locations: locations.map((l) => l.name) });
   })
 );
+
+router.get('/bus-meta', requireAuth, (req, res) => {
+  res.json(busMeta());
+});
 
 export default router;

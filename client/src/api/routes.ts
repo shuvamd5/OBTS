@@ -24,4 +24,10 @@ export const routesApi = {
 
   updateCheckpoint: (id: string, cpid: string, data: { route?: string; price?: number }) =>
     api.patch<RouteResponse>(`/routes/${id}/checkpoints/${cpid}`, data),
+
+  remove: (id: string) =>
+    api.delete<{ message: string; id: string }>(`/routes/${id}`),
+
+  removeCheckpoint: (id: string, cpid: string) =>
+    api.delete<{ message: string; route: Route }>(`/routes/${id}/checkpoints/${cpid}`),
 };

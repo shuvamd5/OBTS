@@ -41,4 +41,13 @@ api.interceptors.response.use(
   }
 );
 
+export function serializeError(err: unknown): string {
+  if (err instanceof AxiosError) {
+    const msg = (err.response?.data as { message?: string } | undefined)?.message;
+    if (msg) return msg;
+    if (err.response?.status) return `Request failed (${err.response.status})`;
+  }
+  return err instanceof Error ? err.message : "Something went wrong";
+}
+
 export default api;

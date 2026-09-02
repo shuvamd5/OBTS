@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import Route from '../models/Route.js';
 import Location from '../models/Location.js';
+import Addroute from '../models/Addroute.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 async function ensureLocation(name) {
@@ -152,4 +153,50 @@ export const updateCheckpoint = asyncHandler(async (req, res) => {
   sortedCheckpoints(route);
   await route.save();
   res.json({ route });
+});
+
+export const deleteRoute = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+
+  if (!mongoose.isValidObjectId(id)) {
+    throw new AppError(400, 'Invalid route id');
+  }
+
+  const route = await Route.findById(id);
+  if (!route) {
+    throw new AppError(404, 'Route not found');
+  }
+
+  const linked = await Addroute.findOne({ rid: id }).select('_id').lean();
+  if (linked) {
+    throw new AppError(
+      400,
+      'Cannot delete route — it is assigned to one or more schedules. Remove those schedule fares first.'
+    );
+  }
+
+  await Route.findByIdAndDelete(id);
+  res.json({ message: 'Route deleted', id });
+});
+
+export const deleteCheckpoint = asyncHandler(async (req, res) => {
+  const { id, cpid } = req.params;
+
+  if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(cpid)) {
+    throw new AppError(400, 'Invalid id');
+  }
+
+  const route = await Route.findById(id);
+  if (!route) {
+    throw new AppError(404, 'Route not found');
+  }
+
+  const checkpoint = route.checkpoints.id(cpid);
+  if (!checkpoint) {
+    throw new AppError(404, 'Checkpoint not found');
+  }
+
+  route.checkpoints.pull(cpid);
+  await route.save();
+  res.json({ route, message: 'Checkpoint deleted' });
 });

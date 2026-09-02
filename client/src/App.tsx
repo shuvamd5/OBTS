@@ -1,42 +1,19 @@
-import { Routes, Route, Navigate, Link } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
+import Layout from "./components/Layout";
 import { isStaff } from "./lib/roles";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import AdminUsersPage from "./pages/AdminUsersPage";
 import RoutesPage from "./pages/RoutesPage";
-import AdminRoutesPage from "./pages/AdminRoutesPage";
+import AddRoutePage from "./pages/AddRoutePage";
+import BusesPage from "./pages/BusesPage";
+import AddBusPage from "./pages/AddBusPage";
+import SchedulesPage from "./pages/SchedulesPage";
+import AddSchedulePage from "./pages/AddSchedulePage";
 import type { ReactNode } from "react";
-
-function HomePage() {
-  const { user, logout } = useAuth();
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center gap-6 bg-gray-100">
-      <h1 className="text-4xl font-bold text-blue-600">OBTS</h1>
-      <p>Welcome, {user?.uname}!</p>
-      <Link className="text-blue-600 underline" to="/routes">
-        Routes
-      </Link>
-      {isStaff(user) && (
-        <>
-          <Link className="text-blue-600 underline" to="/admin/routes">
-            Manage Routes
-          </Link>
-          <Link className="text-blue-600 underline" to="/users">
-            Manage Users
-          </Link>
-        </>
-      )}
-      <button
-        onClick={() => logout()}
-        className="bg-red-600 text-white rounded px-4 py-2 hover:bg-red-700"
-      >
-        Logout
-      </button>
-    </div>
-  );
-}
 
 function StaffRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
@@ -50,30 +27,16 @@ export default function App() {
   return (
     <AuthProvider>
       <Routes>
-        <Route path="/" element={
-          <ProtectedRoute>
-            <HomePage />
-          </ProtectedRoute>
-        } />
-        <Route path="/users" element={
-          <ProtectedRoute>
-            <StaffRoute>
-              <AdminUsersPage />
-            </StaffRoute>
-          </ProtectedRoute>
-        } />
-        <Route path="/routes" element={
-          <ProtectedRoute>
-            <RoutesPage />
-          </ProtectedRoute>
-        } />
-        <Route path="/admin/routes" element={
-          <ProtectedRoute>
-            <StaffRoute>
-              <AdminRoutesPage />
-            </StaffRoute>
-          </ProtectedRoute>
-        } />
+        <Route element={<Layout />}>
+          <Route path="/" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute><StaffRoute><AdminUsersPage /></StaffRoute></ProtectedRoute>} />
+          <Route path="/routes" element={<ProtectedRoute><RoutesPage /></ProtectedRoute>} />
+          <Route path="/routes/add" element={<ProtectedRoute><StaffRoute><AddRoutePage /></StaffRoute></ProtectedRoute>} />
+          <Route path="/buses" element={<ProtectedRoute><BusesPage /></ProtectedRoute>} />
+          <Route path="/buses/add" element={<ProtectedRoute><StaffRoute><AddBusPage /></StaffRoute></ProtectedRoute>} />
+          <Route path="/schedules" element={<ProtectedRoute><SchedulesPage /></ProtectedRoute>} />
+          <Route path="/schedules/add" element={<ProtectedRoute><StaffRoute><AddSchedulePage /></StaffRoute></ProtectedRoute>} />
+        </Route>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />

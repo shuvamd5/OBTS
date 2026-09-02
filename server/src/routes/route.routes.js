@@ -15,6 +15,8 @@ import {
   updateRoute,
   addCheckpoint,
   updateCheckpoint,
+  deleteRoute,
+  deleteCheckpoint,
 } from '../controllers/route.controller.js';
 
 const router = Router();
@@ -43,6 +45,18 @@ router.patch(
   validate(checkpointEditSchema),
   requireRole('Admin', 'Manager'),
   updateCheckpoint
+);
+router.delete(
+  '/:id',
+  validate(routeIdParamSchema, 'params'),
+  requireRole('Admin', 'Manager'),
+  deleteRoute
+);
+router.delete(
+  '/:id/checkpoints/:cpid',
+  validate(checkpointRouteIdParamSchema, 'params'),
+  requireRole('Admin', 'Manager'),
+  deleteCheckpoint
 );
 
 export default router;
