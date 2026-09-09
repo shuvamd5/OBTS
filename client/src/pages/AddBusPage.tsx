@@ -52,7 +52,7 @@ export default function AddBusPage() {
       setBtype("");
       setNseat("");
       setStype("");
-      setMsg(user?.ustatus === "Manager" ? "Bus registered to you." : "Bus registered.");
+      setMsg(user?.ustatus === "operator" ? "Bus registered to you." : "Bus registered.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to register bus");
     } finally {

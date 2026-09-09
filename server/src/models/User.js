@@ -1,7 +1,7 @@
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-export const USER_ROLES = ['Admin', 'Manager', 'User'];
+export const USER_ROLES = ['admin', 'operator', 'customer', 'checker'];
 
 const userSchema = new mongoose.Schema(
   {
@@ -10,7 +10,7 @@ const userSchema = new mongoose.Schema(
     ugender: { type: String, enum: ['Female', 'Male', 'Other'], required: true },
     uemail: { type: String, required: true, unique: true, lowercase: true },
     umobile: { type: String, required: true, unique: true },
-    ustatus: { type: String, enum: USER_ROLES, default: 'User' },
+    ustatus: { type: String, enum: USER_ROLES, default: 'customer' },
     udate: { type: Date, default: () => new Date() },
     utime: { type: String, default: () => new Date().toTimeString().slice(0, 8) },
     totaltc: { type: Number, default: 0 },

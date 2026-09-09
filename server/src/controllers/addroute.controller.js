@@ -2,6 +2,8 @@ import Addroute from '../models/Addroute.js';
 import BusSchedule from '../models/BusSchedule.js';
 import Route from '../models/Route.js';
 import Bus from '../models/Bus.js';
+import Seat from '../models/Seat.js';
+import Ticket from '../models/Ticket.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const maxCheckpointFare = (route) =>
@@ -19,13 +21,13 @@ const assertPriceCoversRoute = (route, price) => {
 
 export const listPrices = asyncHandler(async (req, res) => {
   const user = req.user;
-  const isStaff = user.ustatus === 'Admin' || user.ustatus === 'Manager';
+  const isStaff = user.ustatus === 'admin' || user.ustatus === 'operator';
 
   let schedules = await BusSchedule.find({ bsstatus: { $ne: 'Expired' } })
     .sort({ trdate: 1 })
     .select('_id bid trdate trtime bsstatus bssapby')
     .lean();
-  if (user.ustatus === 'Manager') {
+  if (user.ustatus === 'operator') {
     const own = await Bus.find({ uid: user._id }).select('_id').lean();
     const ownIds = own.map((b) => b._id);
     schedules = schedules.filter((s) => ownIds.some((id) => String(id) === String(s.bid)));
@@ -67,7 +69,7 @@ export const assignPrice = asyncHandler(async (req, res) => {
   }
   assertPriceCoversRoute(route, price);
 
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const bus = await Bus.findById(schedule.bid).select('uid').lean();
     if (!bus || String(bus.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');
@@ -110,7 +112,7 @@ export const updateRoute = asyncHandler(async (req, res) => {
   if (!addroute) {
     throw new AppError(404, 'Price entry not found');
   }
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const schedule = await BusSchedule.findById(addroute.bsid).select('bid').lean();
     const bus = await Bus.findById(schedule.bid).select('uid').lean();
     if (!bus || String(bus.uid) !== String(req.user._id)) {
@@ -142,7 +144,7 @@ export const updatePrice = asyncHandler(async (req, res) => {
   if (!addroute) {
     throw new AppError(404, 'Price entry not found');
   }
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const schedule = await BusSchedule.findById(addroute.bsid).select('bid').lean();
     const bus = await Bus.findById(schedule.bid).select('uid').lean();
     if (!bus || String(bus.uid) !== String(req.user._id)) {
@@ -173,13 +175,15 @@ export const deleteAddroute = asyncHandler(async (req, res) => {
   if (!addroute) {
     throw new AppError(404, 'Price entry not found');
   }
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const schedule = await BusSchedule.findById(addroute.bsid).select('bid').lean();
     const bus = await Bus.findById(schedule.bid).select('uid').lean();
     if (!bus || String(bus.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');
     }
   }
+  await Seat.deleteMany({ arid: addroute._id });
+  await Ticket.deleteMany({ arid: addroute._id });
   await Addroute.findByIdAndDelete(id);
 
   res.json({ message: 'Price deleted', id });

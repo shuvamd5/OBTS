@@ -32,7 +32,7 @@ export const register = asyncHandler(async (req, res) => {
     umobile,
     ugender,
     passwordHash,
-    ustatus: 'User',
+    ustatus: 'customer',
     udate,
     utime,
     totaltc: 0,

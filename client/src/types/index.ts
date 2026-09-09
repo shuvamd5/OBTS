@@ -1,4 +1,4 @@
-export type UserRole = "Admin" | "Manager" | "User";
+export type UserRole = "admin" | "operator" | "customer" | "checker";
 export type ScheduleStatus = "not approved" | "going" | "not going" | "pending" | "Expired";
 export type PriceStatus = "unchecked" | "not ok" | "ok" | "Expired";
 
@@ -118,4 +118,79 @@ export interface AppStats {
   schedules: number;
   prices: number;
   total: number;
+}
+
+export type SeatStatus = "E" | "P" | "R";
+
+export interface OfferSeat {
+  sno: number;
+  blc: string;
+  sna: string;
+  status: SeatStatus;
+}
+
+export interface OfferRow {
+  left: string | null;
+  seats: number[];
+}
+
+export interface BookingOffer {
+  arid: string;
+  bsid: string;
+  bid: string;
+  bname: string;
+  bcd: string;
+  bno: string;
+  btype: string;
+  stype: string;
+  nseat: number;
+  trdate: string;
+  trtime: string;
+  route: { rid: string; sp: string; fp: string };
+  query: { sp: string; fp: string };
+  cpid: { sp: number; fp: number };
+  price: number;
+  counts: { E: number; P: number; R: number };
+  seats: OfferSeat[];
+  rows: OfferRow[];
+}
+
+export interface BookingResult {
+  message: string;
+  ticket: {
+    _id: string;
+    arid: string;
+    ssid: string;
+    trdate: string;
+    trtime: string;
+    sno: number;
+    blc: string;
+    sna: string;
+    price: number;
+    uid: string;
+    treby: string;
+    tstatus: SeatStatus;
+    payment: string;
+    pyreby: string;
+  };
+  seat: {
+    _id: string;
+    arid: string;
+    sno: number;
+    sp: string;
+    fp: string;
+    price: number;
+    status: SeatStatus;
+    trdate: string;
+    trtime: string;
+  };
+  bus: {
+    bname: string;
+    bcd: string;
+    bno: string;
+    btype: string;
+    stype: string;
+    nseat: number;
+  };
+  price: number;
 }

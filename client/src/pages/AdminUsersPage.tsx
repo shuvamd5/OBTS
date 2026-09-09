@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { usersApi } from "../api/users";
-import { isAdmin, isManager } from "../lib/roles";
+import { isAdmin, isOperator } from "../lib/roles";
 import type { User, UserRole } from "../types";
 
-const ROLE_TABS: UserRole[] = ["Admin", "Manager", "User"];
+const ROLE_TABS: UserRole[] = ["admin", "operator", "customer", "checker"];
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [activeTab, setActiveTab] = useState<UserRole>("User");
+  const [activeTab, setActiveTab] = useState<UserRole>("customer");
   const [error, setError] = useState("");
 
-  const isManagerView = isManager(user);
+  const isOperatorView = isOperator(user);
   const canChangeRole = isAdmin(user);
 
   useEffect(() => {
     let cancelled = false;
     setError("");
     usersApi
-      .list(isManagerView ? undefined : activeTab)
+      .list(isOperatorView ? undefined : activeTab)
       .then(({ data }) => {
         if (!cancelled) setUsers(data.users);
       })
@@ -29,7 +29,7 @@ export default function AdminUsersPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, isManagerView]);
+  }, [activeTab, isOperatorView]);
 
   async function handleRoleChange(id: string, ustatus: UserRole) {
     try {

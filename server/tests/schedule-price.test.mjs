@@ -77,7 +77,7 @@ try {
   const roleUp = await request(app)
     .patch(`/api/users/${mgr._id}/role`)
     .set(auth(adminToken))
-    .send({ ustatus: 'Manager' });
+    .send({ ustatus: 'operator' });
   assert.equal(roleUp.status, 200, JSON.stringify(roleUp.body));
   mgrToken = (await login(mgr.uemail, 'Test@1234')).accessToken;
 

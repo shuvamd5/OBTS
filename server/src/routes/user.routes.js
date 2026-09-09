@@ -8,13 +8,13 @@ const router = Router();
 
 router.use(requireAuth);
 
-router.get('/', validate(listQuerySchema, 'query'), requireRole('Admin', 'Manager'), listUsers);
+router.get('/', validate(listQuerySchema, 'query'), requireRole('admin', 'operator'), listUsers);
 router.get('/:id', validate(userIdParamSchema, 'params'), getUser);
 router.patch(
   '/:id/role',
   validate(userIdParamSchema, 'params'),
   validate(roleSchema),
-  requireRole('Admin'),
+  requireRole('admin'),
   updateRole
 );
 

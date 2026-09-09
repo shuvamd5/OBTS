@@ -7,6 +7,7 @@ import busRoutes from './bus.routes.js';
 import scheduleRoutes from './schedule.routes.js';
 import addrouteRoutes from './addroute.routes.js';
 import statsRoutes from './stats.routes.js';
+import bookingRoutes from './booking.routes.js';
 
 const router = Router();
 
@@ -17,6 +18,7 @@ router.use('/reference', referenceRoutes);
 router.use('/buses', busRoutes);
 router.use('/schedules', scheduleRoutes);
 router.use('/prices', addrouteRoutes);
+router.use('/bookings', bookingRoutes);
 router.use('/stats', statsRoutes);
 
 export default router;

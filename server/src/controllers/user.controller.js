@@ -2,12 +2,12 @@ import User from '../models/User.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 export const listUsers = asyncHandler(async (req, res) => {
-  const isManager = req.user.ustatus === 'Manager';
-  const isAdmin = req.user.ustatus === 'Admin';
+  const isOperator = req.user.ustatus === 'operator';
+  const isAdmin = req.user.ustatus === 'admin';
 
   const filter = {};
-  if (isManager) {
-    filter.ustatus = 'User';
+  if (isOperator) {
+    filter.ustatus = 'customer';
   } else if (isAdmin && req.query.role) {
     filter.ustatus = req.query.role;
   }
@@ -17,7 +17,7 @@ export const listUsers = asyncHandler(async (req, res) => {
 });
 
 export const getUser = asyncHandler(async (req, res) => {
-  const viewerIsStaff = ['Admin', 'Manager'].includes(req.user.ustatus);
+  const viewerIsStaff = ['admin', 'operator'].includes(req.user.ustatus);
   if (!viewerIsStaff && req.params.id !== req.user._id.toString()) {
     throw new AppError(403, 'Insufficient permissions');
   }

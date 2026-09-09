@@ -13,14 +13,14 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', listBuses);
-router.post('/', validate(busCreateSchema), requireRole('Admin', 'Manager'), createBus);
+router.post('/', validate(busCreateSchema), requireRole('admin', 'operator'), createBus);
 router.patch(
   '/:id/status',
   validate(busIdParamSchema, 'params'),
   validate(busStatusSchema),
-  requireRole('Admin'),
+  requireRole('admin'),
   updateStatus
 );
-router.delete('/:id', validate(busIdParamSchema, 'params'), requireRole('Admin', 'Manager'), deleteBus);
+router.delete('/:id', validate(busIdParamSchema, 'params'), requireRole('admin', 'operator'), deleteBus);
 
 export default router;

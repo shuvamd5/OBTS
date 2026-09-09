@@ -2,13 +2,15 @@ import Bus from '../models/Bus.js';
 import BusSchedule from '../models/BusSchedule.js';
 import Addroute from '../models/Addroute.js';
 import Sales from '../models/Sales.js';
+import Seat from '../models/Seat.js';
+import Ticket from '../models/Ticket.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 export const listBuses = asyncHandler(async (req, res) => {
   const user = req.user;
   let filter;
-  if (user.ustatus === 'Admin') filter = {};
-  else if (user.ustatus === 'Manager') filter = { uid: user._id };
+  if (user.ustatus === 'admin') filter = {};
+  else if (user.ustatus === 'operator') filter = { uid: user._id };
   else filter = { bstatus: 'active' };
 
   const buses = await Bus.find(filter)
@@ -43,7 +45,7 @@ export const createBus = asyncHandler(async (req, res) => {
     stype: stype.toUpperCase(),
     bstatus: 'unchecked',
     bsapby: 'none',
-    uid: req.user.ustatus === 'Manager' ? req.user._id : null,
+    uid: req.user.ustatus === 'operator' ? req.user._id : null,
   });
 
   res.status(201).json({ bus });
@@ -91,12 +93,16 @@ export const deleteBus = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Bus not found');
   }
 
-  if (req.user.ustatus === 'Manager' && String(bus.uid) !== String(req.user._id)) {
+  if (req.user.ustatus === 'operator' && String(bus.uid) !== String(req.user._id)) {
     throw new AppError(403, 'Not your bus');
   }
 
   const scheds = await BusSchedule.find({ bid: bus._id }).select('_id').lean();
   const sid = scheds.map((x) => x._id);
+  const ars = await Addroute.find({ bsid: { $in: sid } }).select('_id').lean();
+  const arid = ars.map((x) => x._id);
+  await Seat.deleteMany({ arid: { $in: arid } });
+  await Ticket.deleteMany({ arid: { $in: arid } });
   await Addroute.deleteMany({ bsid: { $in: sid } });
   await Sales.deleteMany({ bsid: { $in: sid } });
   await BusSchedule.deleteMany({ bid: bus._id });

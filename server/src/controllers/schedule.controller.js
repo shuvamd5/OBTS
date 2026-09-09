@@ -1,6 +1,8 @@
 import BusSchedule from '../models/BusSchedule.js';
 import Addroute from '../models/Addroute.js';
 import Sales from '../models/Sales.js';
+import Seat from '../models/Seat.js';
+import Ticket from '../models/Ticket.js';
 import Bus from '../models/Bus.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
@@ -10,9 +12,9 @@ const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
 export const listSchedules = asyncHandler(async (req, res) => {
   const user = req.user;
   let filter;
-  if (user.ustatus === 'Admin') {
+  if (user.ustatus === 'admin') {
     filter = { bsstatus: { $ne: 'Expired' } };
-  } else if (user.ustatus === 'Manager') {
+  } else if (user.ustatus === 'operator') {
     const own = await Bus.find({ uid: user._id }).select('_id').lean();
     filter = { bsstatus: { $ne: 'Expired' }, bid: { $in: own.map((b) => b._id) } };
   } else {
@@ -46,7 +48,7 @@ export const createSchedule = asyncHandler(async (req, res) => {
   if (!bus) {
     throw new AppError(404, 'Bus not found');
   }
-  if (req.user.ustatus === 'Manager' && String(bus.uid) !== String(req.user._id)) {
+  if (req.user.ustatus === 'operator' && String(bus.uid) !== String(req.user._id)) {
     throw new AppError(403, 'Not your bus');
   }
 
@@ -131,17 +133,17 @@ export const deleteSchedule = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Schedule not found');
   }
 
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const busOwner = await Bus.findById(schedule.bid).select('uid').lean();
     if (!busOwner || String(busOwner.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');
     }
   }
 
-  // obts deletes ticket/seat rows by arid first, then addroute + sales.
   const price = await Addroute.findOne({ bsid: schedule._id }).select('_id').lean();
   if (price) {
-    
+    await Seat.deleteMany({ arid: price._id });
+    await Ticket.deleteMany({ arid: price._id });
   }
   await Addroute.deleteMany({ bsid: schedule._id });
   await Sales.deleteMany({ bsid: schedule._id });
@@ -158,7 +160,7 @@ export const updateSchedule = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Schedule not found');
   }
 
-  if (req.user.ustatus === 'Manager') {
+  if (req.user.ustatus === 'operator') {
     const busOwner = await Bus.findById(schedule.bid).select('uid').lean();
     if (!busOwner || String(busOwner.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');

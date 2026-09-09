@@ -20,25 +20,25 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', listSchedules);
-router.post('/', validate(scheduleCreateSchema), requireRole('Admin', 'Manager'), createSchedule);
+router.post('/', validate(scheduleCreateSchema), requireRole('admin', 'operator'), createSchedule);
 router.patch(
   '/:id',
   validate(scheduleIdParamSchema, 'params'),
   validate(scheduleEditSchema),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   updateSchedule
 );
 router.patch(
   '/:id/status',
   validate(scheduleIdParamSchema, 'params'),
   validate(scheduleStatusSchema),
-  requireRole('Admin'),
+  requireRole('admin'),
   updateStatus
 );
 router.delete(
   '/:id',
   validate(scheduleIdParamSchema, 'params'),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   deleteSchedule
 );
 

@@ -24,38 +24,38 @@ const router = Router();
 router.use(requireAuth);
 
 router.get('/', listRoutes);
-router.post('/', validate(routeCreateSchema), requireRole('Admin', 'Manager'), createRoute);
+router.post('/', validate(routeCreateSchema), requireRole('admin', 'operator'), createRoute);
 router.patch(
   '/:id',
   validate(routeIdParamSchema, 'params'),
   validate(routeEditSchema),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   updateRoute
 );
 router.post(
   '/:id/checkpoints',
   validate(routeIdParamSchema, 'params'),
   validate(checkpointCreateSchema),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   addCheckpoint
 );
 router.patch(
   '/:id/checkpoints/:cpid',
   validate(checkpointRouteIdParamSchema, 'params'),
   validate(checkpointEditSchema),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   updateCheckpoint
 );
 router.delete(
   '/:id',
   validate(routeIdParamSchema, 'params'),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   deleteRoute
 );
 router.delete(
   '/:id/checkpoints/:cpid',
   validate(checkpointRouteIdParamSchema, 'params'),
-  requireRole('Admin', 'Manager'),
+  requireRole('admin', 'operator'),
   deleteCheckpoint
 );
 
