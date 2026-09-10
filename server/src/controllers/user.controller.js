@@ -8,8 +8,8 @@ export const listUsers = asyncHandler(async (req, res) => {
   const filter = {};
   if (isOperator) {
     filter.ustatus = 'customer';
-  } else if (isAdmin && req.query.role) {
-    filter.ustatus = req.query.role;
+  } else if (isAdmin && req.validated.query.role) {
+    filter.ustatus = req.validated.query.role;
   }
 
   const users = await User.find(filter).sort({ uname: 1 }).lean();
@@ -18,10 +18,10 @@ export const listUsers = asyncHandler(async (req, res) => {
 
 export const getUser = asyncHandler(async (req, res) => {
   const viewerIsStaff = ['admin', 'operator'].includes(req.user.ustatus);
-  if (!viewerIsStaff && req.params.id !== req.user._id.toString()) {
+  if (!viewerIsStaff && req.validated.params.id !== req.user._id.toString()) {
     throw new AppError(403, 'Insufficient permissions');
   }
-  const user = await User.findById(req.params.id);
+  const user = await User.findById(req.validated.params.id);
   if (!user) {
     throw new AppError(404, 'User not found');
   }
@@ -29,8 +29,8 @@ export const getUser = asyncHandler(async (req, res) => {
 });
 
 export const updateRole = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { ustatus } = req.body;
+  const { id } = req.validated.params;
+  const { ustatus } = req.validated.body;
 
   const target = await User.findById(id);
   if (!target) {

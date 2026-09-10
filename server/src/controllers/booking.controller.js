@@ -96,7 +96,7 @@ const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
 };
 
 export const searchOffers = asyncHandler(async (req, res) => {
-  const { sp, fp, date, order } = req.query;
+  const { sp, fp, date, order } = req.validated.query;
 
   const [spLoc, fpLoc] = await Promise.all([
     Location.findOne({ name: sp }).lean(),
@@ -160,7 +160,7 @@ const findEligible = async (arid) => {
 };
 
 const createBooking = async (req, res, action) => {
-  const { arid, sno, sp, fp } = req.body;
+  const { arid, sno, sp, fp } = req.validated.body;
 
   const { addroute, schedule, route, bus } = await findEligible(arid);
 

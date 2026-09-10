@@ -27,7 +27,7 @@ export const listBuses = asyncHandler(async (req, res) => {
 });
 
 export const createBus = asyncHandler(async (req, res) => {
-  const { bcd0, bcd1, bcd2, bno, bname, btype, nseat, stype } = req.body;
+  const { bcd0, bcd1, bcd2, bno, bname, btype, nseat, stype } = req.validated.body;
 
   const bcd = `${bcd0} ${bcd1} ${bcd2}`;
 
@@ -52,8 +52,8 @@ export const createBus = asyncHandler(async (req, res) => {
 });
 
 export const updateStatus = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { bstatus } = req.body;
+  const { id } = req.validated.params;
+  const { bstatus } = req.validated.body;
 
   const bus = await Bus.findById(id);
   if (!bus) {
@@ -86,7 +86,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
 });
 
 export const deleteBus = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
 
   const bus = await Bus.findById(id);
   if (!bus) {

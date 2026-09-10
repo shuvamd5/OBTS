@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { ADDROUTE_STATUSES } from '../models/Addroute.js';
 
-const EDITABLE = ADDROUTE_STATUSES.filter((s) => s !== 'Expired');
+const EDITABLE = ADDROUTE_STATUSES.filter((s) => s !== 'Expired') as [string, ...string[]];
 
 const objectId = z.string().regex(/^[0-9a-fA-F]{24}$/);
 

@@ -1,4 +1,6 @@
-// seat-map geometry for each bus with nseat 
+// seat-map geometry for each bus with nseat
+
+import type { SeatInfo, SeatLayout, SeatRow } from '../../../shared/domain.js';
 
 const LABELS_37 = [
   'H', '2', '4', '6', '8', '10', '12', '14', '16',
@@ -19,7 +21,7 @@ const LABELS_39 = [
 const BLOCK_B_37 = 18;
 const BLOCK_B_39 = 20;
 
-const ROWS_37 = [
+const ROWS_37: SeatRow[] = [
   { left: 'Driver', seats: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
   { left: null, seats: [9, 10, 11, 12, 13, 14, 15, 16, 17] },
   { left: 'Corridor', seats: [18] },
@@ -27,7 +29,7 @@ const ROWS_37 = [
   { left: 'Door', seats: [28, 29, 30, 31, 32, 33, 34, 35, 36] },
 ];
 
-const ROWS_39 = [
+const ROWS_39: SeatRow[] = [
   { left: 'Driver', seats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] },
   { left: null, seats: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19] },
   { left: 'Corridor', seats: [20] },
@@ -35,17 +37,16 @@ const ROWS_39 = [
   { left: null, seats: [30, 31, 32, 33, 34, 35, 36, 37, 38] },
 ];
 
-const LAYOUTS = {
+const LAYOUTS: Record<number, SeatLayout> = {
   37: { labels: LABELS_37, rows: ROWS_37, blockB: BLOCK_B_37 },
   39: { labels: LABELS_39, rows: ROWS_39, blockB: BLOCK_B_39 },
 };
 
-export function layoutFor(nseat) {
+export function layoutFor(nseat: number): SeatLayout {
   return LAYOUTS[nseat] ?? LAYOUTS[37];
 }
 
-
-export function seatAt(nseat, iter) {
+export function seatAt(nseat: number, iter: number): SeatInfo | null {
   const layout = layoutFor(nseat);
   if (!layout.labels[iter]) return null;
   return {
@@ -55,4 +56,4 @@ export function seatAt(nseat, iter) {
   };
 }
 
-export const seatRows = (nseat) => layoutFor(nseat).rows;
+export const seatRows = (nseat: number): SeatRow[] => layoutFor(nseat).rows;

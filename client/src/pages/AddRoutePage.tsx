@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { routesApi } from "../api/routes";
 import { referenceApi } from "../api/reference";
 import { serializeError } from "../api/client";
@@ -9,12 +10,16 @@ interface NewCheckpoint {
   price: string;
 }
 
-const inputClass =
-  "rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+const inputClass = "input px-2 py-1.5 text-sm";
 
 export default function AddRoutePage() {
-  const [locations, setLocations] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const locationsQuery = useQuery({
+    queryKey: ["locations"],
+    queryFn: () => referenceApi.locations().then(({ data }) => data.locations),
+  });
+  const locations = locationsQuery.data ?? [];
+  const loading = locationsQuery.isLoading;
+  const metaError = locationsQuery.isError ? "Failed to load towns" : "";
 
   const [sp, setSp] = useState("");
   const [fp, setFp] = useState("");
@@ -23,14 +28,6 @@ export default function AddRoutePage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    referenceApi
-      .locations()
-      .then(({ data }) => setLocations(data.locations))
-      .catch(() => setError("Failed to load towns"))
-      .finally(() => setLoading(false));
-  }, []);
 
   function addCheckpointRow() {
     setCheckpoints((prev) => [...prev, { route: "", price: "" }]);
@@ -110,34 +107,27 @@ export default function AddRoutePage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Add Route</h1>
-        <Link className="text-blue-600 underline" to="/routes">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Add Route</h1>
+        <Link className="text-sm font-medium text-brand-600 hover:text-brand-700" to="/routes">
           ← View Routes
         </Link>
       </div>
 
-      {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-      {msg && <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-600">{msg}</div>}
+      {metaError && <div className="mb-4 rounded-card bg-red-50 px-3 py-2 text-sm text-red-600">{metaError}</div>}
+      {error && <div className="mb-4 rounded-card bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      {msg && <div className="mb-4 rounded-card bg-green-50 px-3 py-2 text-sm text-green-600">{msg}</div>}
 
-      <form onSubmit={submit} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form onSubmit={submit} className="card rounded-panel p-6">
         <h2 className="font-semibold text-slate-800">Route Points</h2>
-        <div className="mt-3 flex gap-3">
-          <select
-            className="w-full border rounded px-3 py-2 text-sm"
-            value={sp}
-            onChange={(e) => setSp(e.target.value)}
-          >
+        <div className="mt-3 flex flex-wrap gap-3">
+          <select className="input flex-1" value={sp} onChange={(e) => setSp(e.target.value)}>
             <option value="">Start point</option>
             {locations.map((t) => (
               <option key={t} value={t}>{t}</option>
             ))}
           </select>
-          <select
-            className="w-full border rounded px-3 py-2 text-sm"
-            value={fp}
-            onChange={(e) => setFp(e.target.value)}
-          >
+          <select className="input flex-1" value={fp} onChange={(e) => setFp(e.target.value)}>
             <option value="">End point</option>
             {locations
               .filter((t) => t !== sp)
@@ -152,7 +142,7 @@ export default function AddRoutePage() {
           <button
             type="button"
             onClick={addCheckpointRow}
-            className="rounded-lg border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
+            className="btn-secondary px-2.5 py-1 text-xs"
           >
             + Add checkpoint
           </button>
@@ -164,9 +154,9 @@ export default function AddRoutePage() {
         {checkpoints.length > 0 && (
           <div className="mt-3 space-y-2">
             {checkpoints.map((c, i) => (
-              <div key={i} className="flex items-center gap-2">
+              <div key={i} className="flex flex-wrap items-center gap-2">
                 <select
-                  className="flex-1 border rounded px-3 py-1.5 text-sm"
+                  className="input flex-1"
                   value={c.route}
                   onChange={(e) => updateCheckpoint(i, "route", e.target.value)}
                 >
@@ -186,7 +176,7 @@ export default function AddRoutePage() {
                 <button
                   type="button"
                   onClick={() => removeCheckpointRow(i)}
-                  className="rounded-lg border border-red-300 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                  className="btn-danger"
                 >
                   Remove
                 </button>
@@ -196,11 +186,7 @@ export default function AddRoutePage() {
         )}
 
         <div className="mt-5">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button type="submit" disabled={busy} className="btn-primary">
             {busy ? "Creating..." : "Create Route"}
           </button>
         </div>

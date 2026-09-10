@@ -5,9 +5,11 @@
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "dev": "nodemon src/index.js",
-    "start": "node src/index.js",
-    "seed": "node src/seed/seed.js"
+    "dev": "tsx watch src/index.js",
+    "start": "tsx src/index.js",
+    "seed": "tsx src/seed/seed.js",
+    "test": "node --import tsx --test tests/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "license": "ISC",
   "dependencies": {
@@ -22,7 +24,11 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.2",
     "nodemon": "^3.1.14",
-    "supertest": "^7.2.2"
+    "supertest": "^7.2.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
   }
 }

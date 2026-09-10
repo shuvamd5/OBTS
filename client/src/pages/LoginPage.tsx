@@ -1,10 +1,13 @@
 import { FormEvent, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
+import PasswordInput from "../components/ui/PasswordInput";
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const resetDone = (location.state as { resetDone?: boolean } | null)?.resetDone;
   const [logid, setLogid] = useState("");
   const [logpass, setLogpass] = useState("");
   const [error, setError] = useState("");
@@ -25,30 +28,43 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
-      <form onSubmit={handleSubmit} className="bg-white p-8 rounded-lg shadow-md w-full max-w-sm space-y-4">
-        <h1 className="text-2xl font-bold text-center text-blue-600">Login</h1>
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+    <div className="flex min-h-screen items-center justify-center bg-slate-50">
+      <form
+        onSubmit={handleSubmit}
+        className="card w-full max-w-sm space-y-4 rounded-panel p-8"
+      >
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Login</h1>
+          <p className="mt-1 text-sm text-slate-500">Welcome back to eYatra.</p>
+        </div>
+        {resetDone && (
+          <p className="text-sm text-green-600">Password reset successful. Log in with your new password.</p>
+        )}
+        {error && <p className="text-sm text-red-600">{error}</p>}
         <input
-          className="w-full border rounded px-3 py-2"
+          className="input w-full"
           placeholder="Email or mobile"
           value={logid}
           onChange={(e) => setLogid(e.target.value)}
           required
         />
-        <input
-          className="w-full border rounded px-3 py-2"
-          type="password"
+        <PasswordInput
           placeholder="Password"
           value={logpass}
           onChange={(e) => setLogpass(e.target.value)}
+          autoComplete="current-password"
           required
         />
-        <button className="w-full bg-blue-600 text-white rounded py-2 hover:bg-blue-700 disabled:opacity-50" disabled={busy}>
+        <p className="-mt-2 text-right">
+          <Link className="text-sm font-medium text-brand-600 hover:text-brand-700" to="/forgot-password">
+            Forgot password?
+          </Link>
+        </p>
+        <button className="btn-primary w-full" disabled={busy}>
           {busy ? "Logging in..." : "Login"}
         </button>
-        <p className="text-sm text-center">
-          No account? <Link className="text-blue-600 underline" to="/register">Register</Link>
+        <p className="text-center text-sm">
+          No account? <Link className="font-medium text-brand-600 hover:text-brand-700" to="/register">Register</Link>
         </p>
       </form>
     </div>

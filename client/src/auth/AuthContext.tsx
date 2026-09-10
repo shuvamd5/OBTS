@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import * as auth from "../api/auth";
-import type { User } from "../types";
+import type { UpdateProfilePayload, User } from "../types";
 
 interface AuthContextValue {
   user: User | null;
@@ -13,6 +13,7 @@ interface AuthContextValue {
     upass: string;
     ugender: string;
   }) => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -46,13 +47,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(res.user);
   }
 
+  async function updateProfile(payload: UpdateProfilePayload) {
+    const updated = await auth.updateMe(payload);
+    setUser(updated);
+  }
+
   async function logout() {
     await auth.logout();
     setUser(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, updateProfile, logout }}>
       {children}
     </AuthContext.Provider>
   );

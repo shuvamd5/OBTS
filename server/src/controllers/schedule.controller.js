@@ -42,7 +42,7 @@ export const listSchedules = asyncHandler(async (req, res) => {
 });
 
 export const createSchedule = asyncHandler(async (req, res) => {
-  const { bid, trdate, trtime } = req.body;
+  const { bid, trdate, trtime } = req.validated.body;
 
   const bus = await Bus.findById(bid);
   if (!bus) {
@@ -86,8 +86,8 @@ export const createSchedule = asyncHandler(async (req, res) => {
 });
 
 export const updateStatus = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { bsstatus } = req.body;
+  const { id } = req.validated.params;
+  const { bsstatus } = req.validated.body;
 
   const schedule = await BusSchedule.findById(id);
   if (!schedule) {
@@ -126,7 +126,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
 });
 
 export const deleteSchedule = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
 
   const schedule = await BusSchedule.findById(id);
   if (!schedule) {
@@ -153,7 +153,7 @@ export const deleteSchedule = asyncHandler(async (req, res) => {
 });
 
 export const updateSchedule = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
 
   const schedule = await BusSchedule.findById(id);
   if (!schedule) {
@@ -167,11 +167,11 @@ export const updateSchedule = asyncHandler(async (req, res) => {
     }
   }
 
+  const { trdate, trtime } = req.validated.body;
   const changes = {};
 
-  if (req.body.trdate !== undefined && req.body.trdate !== undefined) {
-    const newDate = req.body.trdate;
-    const t0 = startOfDay(new Date(`${newDate}T00:00:00`));
+  if (trdate !== undefined) {
+    const t0 = startOfDay(new Date(`${trdate}T00:00:00`));
     if (Number.isNaN(t0.getTime())) {
       throw new AppError(400, 'Invalid travelling date');
     }
@@ -201,8 +201,8 @@ export const updateSchedule = asyncHandler(async (req, res) => {
     }
   }
 
-  if (req.body.trtime !== undefined && req.body.trtime !== schedule.trtime) {
-    changes.trtime = req.body.trtime;
+  if (trtime !== undefined && trtime !== schedule.trtime) {
+    changes.trtime = trtime;
   }
 
   if (Object.keys(changes).length === 0) {

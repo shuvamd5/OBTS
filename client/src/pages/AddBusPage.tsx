@@ -1,17 +1,22 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
 import { busesApi, type BusCreatePayload } from "../api/buses";
 import { referenceApi } from "../api/reference";
-import type { BusMeta } from "../types";
 
-const inputClass =
-  "rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+const inputClass = "input px-2 py-1.5 text-sm";
 
 export default function AddBusPage() {
   const { user } = useAuth();
-  const [meta, setMeta] = useState<BusMeta | null>(null);
-  const [loading, setLoading] = useState(true);
+
+  const metaQuery = useQuery({
+    queryKey: ["bus-meta"],
+    queryFn: () => referenceApi.busMeta().then(({ data }) => data),
+  });
+  const meta = metaQuery.data;
+  const loading = metaQuery.isLoading;
+  const metaError = metaQuery.isError ? "Failed to load bus metadata" : "";
 
   const [bcd0, setBcd0] = useState("");
   const [bcd1, setBcd1] = useState("");
@@ -24,14 +29,6 @@ export default function AddBusPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    referenceApi
-      .busMeta()
-      .then(({ data }) => setMeta(data))
-      .catch(() => setError("Failed to load bus metadata"))
-      .finally(() => setLoading(false));
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,19 +90,20 @@ export default function AddBusPage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Add Bus</h1>
-        <Link className="text-blue-600 underline" to="/buses">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Add Bus</h1>
+        <Link className="text-sm font-medium text-brand-600 hover:text-brand-700" to="/buses">
           ← View Buses
         </Link>
       </div>
 
-      {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+      {metaError && <p className="mb-4 text-sm text-red-600">{metaError}</p>}
+      {error && <p className="mb-4 text-sm text-red-600">{error}</p>}
 
       {meta && (
-        <form onSubmit={submit} className="bg-white rounded-lg shadow p-4">
-          <div className="flex flex-wrap gap-3 mb-3">
-            <select className="border rounded px-2 py-1.5 text-sm" value={bcd0} onChange={(e) => setBcd0(e.target.value)}>
+        <form onSubmit={submit} className="card rounded-panel p-6">
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <select className="input px-2 py-1.5 text-sm" value={bcd0} onChange={(e) => setBcd0(e.target.value)}>
               <option value="">Zone...</option>
               {meta.zoneCodes.map((z) => (
                 <option key={z.code} value={z.code}>
@@ -121,7 +119,7 @@ export default function AddBusPage() {
               onChange={(e) => setBcd1(e.target.value)}
               className={`${inputClass} w-20`}
             />
-            <select className="border rounded px-2 py-1.5 text-sm" value={bcd2} onChange={(e) => setBcd2(e.target.value)}>
+            <select className="input px-2 py-1.5 text-sm" value={bcd2} onChange={(e) => setBcd2(e.target.value)}>
               <option value="">Type...</option>
               {meta.vehicleTypes.map((v) => (
                 <option key={v.code} value={v.code}>
@@ -137,36 +135,42 @@ export default function AddBusPage() {
               onChange={(e) => setBno(e.target.value)}
               className={`${inputClass} w-20`}
             />
-            <input type="text" placeholder="NAME" value={bname} onChange={(e) => setBname(e.target.value)} className={inputClass} />
+            <input
+              type="text"
+              placeholder="NAME"
+              value={bname}
+              onChange={(e) => setBname(e.target.value)}
+              className={`${inputClass} min-w-40`}
+            />
           </div>
 
-          <div className="mb-2 text-sm text-gray-600 space-x-4">
+          <div className="mb-2 space-x-4 text-sm text-slate-600">
             {(["A/C", "Deluxe", "Suspension"] as const).map((t) => (
               <label key={t} className="inline-flex items-center gap-1">
                 {radio("btype", t)}
               </label>
             ))}
-            <span className="text-xs text-gray-400">features</span>
+            <span className="text-xs text-slate-400">features</span>
           </div>
-          <div className="mb-2 text-sm text-gray-600 space-x-4">
+          <div className="mb-2 space-x-4 text-sm text-slate-600">
             {([37, 39] as const).map((n) => (
               <label key={n} className="inline-flex items-center gap-1">
                 {radio("nseat", String(n))}
               </label>
             ))}
-            <span className="text-xs text-gray-400">no. of seats</span>
+            <span className="text-xs text-slate-400">no. of seats</span>
           </div>
-          <div className="mb-3 text-sm text-gray-600 space-x-4">
+          <div className="mb-3 space-x-4 text-sm text-slate-600">
             {(["foldable", "semi-foldable", "unfoldable"] as const).map((s) => (
               <label key={s} className="inline-flex items-center gap-1">
                 {radio("stype", s)}
               </label>
             ))}
-            <span className="text-xs text-gray-400">seat type</span>
+            <span className="text-xs text-slate-400">seat type</span>
           </div>
 
           <div className="flex items-center gap-3">
-            <button type="submit" disabled={busy} className="bg-blue-600 text-white rounded px-4 py-2 hover:bg-blue-700 disabled:opacity-50">
+            <button type="submit" disabled={busy} className="btn-primary">
               {busy ? "Adding..." : "Add bus"}
             </button>
             {error && <p className="text-sm text-red-600">{error}</p>}

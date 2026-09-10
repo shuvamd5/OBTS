@@ -13,6 +13,8 @@ const userSchema = new mongoose.Schema(
     ustatus: { type: String, enum: USER_ROLES, default: 'customer' },
     udate: { type: Date, default: () => new Date() },
     utime: { type: String, default: () => new Date().toTimeString().slice(0, 8) },
+    resetToken: { type: String, default: null, select: false },
+    resetTokenExpiry: { type: Date, default: null },
     totaltc: { type: Number, default: 0 },
     reservedtc: { type: Number, default: 0 },
     pendingtc: { type: Number, default: 0 },
@@ -28,7 +30,7 @@ userSchema.methods.comparePassword = function comparePassword(candidate) {
 };
 
 userSchema.methods.toSafeJSON = function toSafeJSON() {
-  const { passwordHash: _passwordHash, __v, ...safe } = this.toObject();
+  const { passwordHash: _passwordHash, __v, _resetToken, ...safe } = this.toObject();
   return safe;
 };
 

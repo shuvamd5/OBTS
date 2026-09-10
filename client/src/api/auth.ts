@@ -1,5 +1,5 @@
 import api, { setAccessToken } from "./client";
-import type { RegisterPayload, User } from "../types";
+import type { RegisterPayload, UpdateProfilePayload, User } from "../types";
 
 interface AuthResponse {
   message: string;
@@ -19,6 +19,11 @@ export async function register(payload: RegisterPayload) {
   return data;
 }
 
+export async function updateMe(payload: UpdateProfilePayload) {
+  const { data } = await api.patch<{ message: string; user: User }>("/auth/me", payload);
+  return data.user;
+}
+
 export async function getMe() {
   const { data } = await api.get<{ user: User }>("/auth/me");
   return data.user;
@@ -30,4 +35,14 @@ export async function logout() {
   } finally {
     setAccessToken(null);
   }
+}
+
+export async function forgotPassword(uemail: string) {
+  const { data } = await api.post<{ message: string }>("/auth/forgot-password", { uemail });
+  return data;
+}
+
+export async function resetPassword(token: string, upass: string) {
+  const { data } = await api.post<{ message: string }>(`/auth/reset-password/${token}`, { upass });
+  return data;
 }

@@ -1,17 +1,17 @@
-import { useEffect, useState } from "react";
 import { NavLink, Outlet, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
 import { statsApi } from "../api/stats";
 import { isStaff } from "../lib/roles";
 import type { AppStats } from "../types";
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
-  isActive ? "font-semibold text-blue-600" : "text-slate-600 hover:text-blue-600";
+  isActive ? "font-semibold text-brand-700" : "text-slate-600 hover:text-brand-700";
 
 function Badge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">
+    <span className="ml-0.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-slate-200 px-1 text-[10px] font-semibold text-slate-600">
       {count}
     </span>
   );
@@ -19,36 +19,23 @@ function Badge({ count }: { count: number }) {
 
 export default function Layout() {
   const { user, logout } = useAuth();
-  const [stats, setStats] = useState<AppStats | null>(null);
   const staff = isStaff(user);
 
-  useEffect(() => {
-    if (!user) {
-      setStats(null);
-      return;
-    }
-    let active = true;
-    statsApi
-      .get()
-      .then((res) => {
-        if (active) setStats(res.data);
-      })
-      .catch(() => {
-        if (active) setStats(null);
-      });
-    return () => {
-      active = false;
-    };
-  }, [user]);
+  const statsQuery = useQuery({
+    queryKey: ["stats"],
+    queryFn: () => statsApi.get().then((res) => res.data satisfies AppStats),
+    enabled: Boolean(user),
+  });
+  const stats = user ? (statsQuery.data ?? null) : null;
 
   const schedulesBadge = staff ? (stats?.schedules ?? 0) + (stats?.prices ?? 0) : 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white shadow-sm">
+      <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/" className="text-lg font-bold tracking-wide text-blue-600">
-            OBTS
+          <Link to="/" className="text-lg font-bold tracking-tight text-brand-700">
+            eYatra
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             <NavLink to="/" end className={linkClass}>
@@ -67,12 +54,15 @@ export default function Layout() {
                 <NavLink to="/routes" className={linkClass}>
                   Routes
                 </NavLink>
+                <NavLink to="/profile" className={linkClass}>
+                  Profile
+                </NavLink>
               </>
             )}
             {user ? (
               <button
                 onClick={() => void logout()}
-                className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium hover:bg-slate-100"
+                className="rounded-btn border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100"
               >
                 Logout
               </button>
@@ -90,7 +80,7 @@ export default function Layout() {
       </main>
 
       <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-400">
-        OBTS — Online Bus Ticketing System (MERN migration in progress)
+        eYatra — Online Bus Ticketing
       </footer>
     </div>
   );

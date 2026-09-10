@@ -27,6 +27,15 @@ export interface RegisterPayload {
   ugender: string;
 }
 
+export interface UpdateProfilePayload {
+  uname?: string;
+  uemail?: string;
+  umobile?: string;
+  ugender?: string;
+  curpass?: string;
+  upass?: string;
+}
+
 export interface Checkpoint {
   _id: string;
   route: string;

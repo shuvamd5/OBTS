@@ -1,61 +1,58 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
 import { usersApi } from "../api/users";
+import { serializeError } from "../api/client";
 import { isAdmin, isOperator } from "../lib/roles";
 import type { User, UserRole } from "../types";
+import Pill from "../components/ui/Pill";
+import Select from "../components/ui/Select";
+import UserStat from "../components/users/UserStat";
 
 const ROLE_TABS: UserRole[] = ["admin", "operator", "customer", "checker"];
 
 export default function AdminUsersPage() {
   const { user } = useAuth();
-  const [users, setUsers] = useState<User[]>([]);
   const [activeTab, setActiveTab] = useState<UserRole>("customer");
   const [error, setError] = useState("");
+  const queryClient = useQueryClient();
 
   const isOperatorView = isOperator(user);
   const canChangeRole = isAdmin(user);
 
-  useEffect(() => {
-    let cancelled = false;
-    setError("");
-    usersApi
-      .list(isOperatorView ? undefined : activeTab)
-      .then(({ data }) => {
-        if (!cancelled) setUsers(data.users);
-      })
-      .catch(() => {
-        if (!cancelled) setError("Failed to load users");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [activeTab, isOperatorView]);
+  const usersQuery = useQuery({
+    queryKey: ["users", isOperatorView ? "all" : activeTab],
+    queryFn: () =>
+      usersApi.list(isOperatorView ? undefined : activeTab).then(({ data }) => data.users),
+  });
 
-  async function handleRoleChange(id: string, ustatus: UserRole) {
-    try {
-      const { data } = await usersApi.changeRole(id, ustatus);
-      setUsers((prev) => prev.map((u) => (u._id === id ? data.user : u)));
-    } catch {
-      setError("Failed to update role");
-    }
-  }
+  const roleMutation = useMutation({
+    mutationFn: ({ id, role }: { id: string; role: UserRole }) =>
+      usersApi.changeRole(id, role).then(({ data }) => data.user),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["users"] }),
+    onError: () => setError("Failed to update role"),
+  });
+
+  const listError = usersQuery.error ? serializeError(usersQuery.error) : "";
+  const users: User[] = usersQuery.data ?? [];
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Users</h1>
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Users</h1>
       </div>
 
-      {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+      {(error || listError) && <p className="mb-4 text-sm text-red-600">{error || listError}</p>}
 
       {isAdmin(user) && (
-        <div className="flex gap-2 mb-4">
+        <div className="mb-5 inline-flex rounded-btn border border-slate-300 bg-white p-0.5">
           {ROLE_TABS.map((role) => (
             <button
               key={role}
+              type="button"
               onClick={() => setActiveTab(role)}
-              className={`px-4 py-2 rounded ${
-                activeTab === role ? "bg-blue-600 text-white" : "bg-white border"
+              className={`rounded-btn px-4 py-1.5 text-sm font-medium transition-colors ${
+                activeTab === role ? "bg-brand-600 text-white" : "text-slate-600 hover:text-brand-700"
               }`}
             >
               {role}s
@@ -66,28 +63,37 @@ export default function AdminUsersPage() {
 
       <div className="space-y-3">
         {users.map((u) => (
-          <div key={u._id} className="bg-white rounded-lg shadow p-4 flex items-center justify-between">
-            <div>
-              <p className="font-semibold">{u.uname}</p>
-              <p className="text-sm text-gray-600">{u.uemail}</p>
-              <p className="text-xs text-gray-500">
-                TC: {u.totaltc} · Reserved: {u.reservedtc} · Pending: {u.pendingtc} ·
-                Paid: {u.payment} · Due: {u.due} · Points: {u.points}
-              </p>
+          <div key={u._id} className="card p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-900">{u.uname}</p>
+                <p className="text-sm text-slate-500">{u.uemail}</p>
+              </div>
+              {canChangeRole ? (
+                <Select
+                  value={u.ustatus}
+                  disabled={roleMutation.isPending}
+                  onChange={(e) =>
+                    roleMutation.mutate({ id: u._id, role: e.target.value as UserRole })
+                  }
+                  className="px-2 py-1 uppercase"
+                >
+                  {ROLE_TABS.map((role) => (
+                    <option key={role} value={role}>{role}</option>
+                  ))}
+                </Select>
+              ) : (
+                <Pill className="uppercase">{u.ustatus}</Pill>
+              )}
             </div>
-            {canChangeRole ? (
-              <select
-                value={u.ustatus}
-                onChange={(e) => handleRoleChange(u._id, e.target.value as UserRole)}
-                className="border rounded px-2 py-1"
-              >
-                {ROLE_TABS.map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-            ) : (
-              <span className="text-sm px-2 py-1 bg-gray-200 rounded">{u.ustatus}</span>
-            )}
+            <div className="mt-3 grid grid-cols-3 gap-3 border-t border-slate-100 pt-3 sm:grid-cols-6">
+              <UserStat label="TC" value={u.totaltc} />
+              <UserStat label="Reserved" value={u.reservedtc} />
+              <UserStat label="Pending" value={u.pendingtc} />
+              <UserStat label="Paid" value={u.payment} />
+              <UserStat label="Due" value={u.due} />
+              <UserStat label="Points" value={u.points} />
+            </div>
           </div>
         ))}
       </div>

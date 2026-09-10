@@ -25,7 +25,7 @@ export const listRoutes = asyncHandler(async (_req, res) => {
 });
 
 export const createRoute = asyncHandler(async (req, res) => {
-  const { sp, fp } = req.body;
+  const { sp, fp } = req.validated.body;
 
   await ensureLocation(sp);
   await ensureLocation(fp);
@@ -40,25 +40,27 @@ export const createRoute = asyncHandler(async (req, res) => {
 });
 
 export const updateRoute = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
   const route = await Route.findById(id);
   if (!route) {
     throw new AppError(404, 'Route not found');
   }
 
-  if (req.body.sp !== undefined) await ensureLocation(req.body.sp);
-  if (req.body.fp !== undefined) await ensureLocation(req.body.fp);
+  const { sp, fp } = req.validated.body;
+
+  if (sp !== undefined) await ensureLocation(sp);
+  if (fp !== undefined) await ensureLocation(fp);
 
   // sp/fp must remain different
-  const newSp = req.body.sp ?? route.sp;
-  const newFp = req.body.fp ?? route.fp;
+  const newSp = sp ?? route.sp;
+  const newFp = fp ?? route.fp;
   if (newSp === newFp) {
     throw new AppError(400, 'Start point and end point must be different towns');
   }
 
   const changes = {};
-  if (req.body.sp !== undefined && req.body.sp !== route.sp) changes.sp = req.body.sp;
-  if (req.body.fp !== undefined && req.body.fp !== route.fp) changes.fp = req.body.fp;
+  if (sp !== undefined && sp !== route.sp) changes.sp = sp;
+  if (fp !== undefined && fp !== route.fp) changes.fp = fp;
 
   if (Object.keys(changes).length === 0) {
     return res.json({ route, message: 'No change' });
@@ -79,8 +81,8 @@ export const updateRoute = asyncHandler(async (req, res) => {
 });
 
 export const addCheckpoint = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { route: stop, price } = req.body;
+  const { id } = req.validated.params;
+  const { route: stop, price } = req.validated.body;
 
   await ensureLocation(stop);
 
@@ -105,7 +107,7 @@ export const addCheckpoint = asyncHandler(async (req, res) => {
 });
 
 export const updateCheckpoint = asyncHandler(async (req, res) => {
-  const { id, cpid } = req.params;
+  const { id, cpid } = req.validated.params;
 
   if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(cpid)) {
     throw new AppError(400, 'Invalid id');
@@ -121,19 +123,21 @@ export const updateCheckpoint = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Checkpoint not found');
   }
 
-  if (req.body.route !== undefined) {
-    await ensureLocation(req.body.route);
-    if (req.body.route === route.sp || req.body.route === route.fp) {
+  const { route: stop, price } = req.validated.body;
+
+  if (stop !== undefined) {
+    await ensureLocation(stop);
+    if (stop === route.sp || stop === route.fp) {
       throw new AppError(400, 'Checkpoint cannot be the start or end point');
     }
   }
 
   const changes = {};
-  if (req.body.route !== undefined && req.body.route !== checkpoint.route) {
-    changes.route = req.body.route;
+  if (stop !== undefined && stop !== checkpoint.route) {
+    changes.route = stop;
   }
-  if (req.body.price !== undefined && req.body.price !== checkpoint.price) {
-    changes.price = req.body.price;
+  if (price !== undefined && price !== checkpoint.price) {
+    changes.price = price;
   }
 
   if (Object.keys(changes).length === 0) {
@@ -156,7 +160,7 @@ export const updateCheckpoint = asyncHandler(async (req, res) => {
 });
 
 export const deleteRoute = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
 
   if (!mongoose.isValidObjectId(id)) {
     throw new AppError(400, 'Invalid route id');
@@ -180,7 +184,7 @@ export const deleteRoute = asyncHandler(async (req, res) => {
 });
 
 export const deleteCheckpoint = asyncHandler(async (req, res) => {
-  const { id, cpid } = req.params;
+  const { id, cpid } = req.validated.params;
 
   if (!mongoose.isValidObjectId(id) || !mongoose.isValidObjectId(cpid)) {
     throw new AppError(400, 'Invalid id');

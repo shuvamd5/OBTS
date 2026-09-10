@@ -1,23 +1,36 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { schedulesApi } from "../api/schedules";
 import { busesApi } from "../api/buses";
 import { routesApi } from "../api/routes";
 import { pricesApi } from "../api/prices";
 import { serializeError } from "../api/client";
 import { todayPlusDays } from "../lib/date";
-import type { Bus, Route } from "../types";
+import type { Route } from "../types";
 
-const inputClass =
-  "rounded-lg border border-slate-300 px-2 py-1.5 text-sm focus:border-blue-500 focus:outline-none";
+const inputClass = "input px-2 py-1.5 text-sm";
 
 const highestCheckpointFare = (route?: Route) =>
   (route?.checkpoints ?? []).reduce((max, c) => Math.max(max, c.price), 0);
 
 export default function AddSchedulePage() {
-  const [buses, setBuses] = useState<Bus[]>([]);
-  const [routes, setRoutes] = useState<Route[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+
+  const busesQuery = useQuery({
+    queryKey: ["buses"],
+    queryFn: () => busesApi.list().then(({ data }) => data.buses),
+  });
+
+  const routesQuery = useQuery({
+    queryKey: ["routes"],
+    queryFn: () => routesApi.list().then(({ data }) => data.routes),
+  });
+
+  const buses = busesQuery.data ?? [];
+  const routes = routesQuery.data ?? [];
+  const loading = busesQuery.isLoading || routesQuery.isLoading;
+  const loadError = busesQuery.error || routesQuery.error ? "Failed to load buses or routes" : "";
 
   const [bid, setBid] = useState("");
   const [trdate, setTrdate] = useState("");
@@ -32,16 +45,6 @@ export default function AddSchedulePage() {
   const minDate = todayPlusDays(4);
   const selectedRoute = useMemo(() => routes.find((r) => r._id === rid), [routes, rid]);
   const minFare = highestCheckpointFare(selectedRoute);
-
-  useEffect(() => {
-    Promise.all([busesApi.list(), routesApi.list()])
-      .then(([b, r]) => {
-        setBuses(b.data.buses);
-        setRoutes(r.data.routes);
-      })
-      .catch(() => setError("Failed to load buses or routes"))
-      .finally(() => setLoading(false));
-  }, []);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -74,6 +77,7 @@ export default function AddSchedulePage() {
       setTrtime("");
       setRid("");
       setPrice("");
+      void queryClient.invalidateQueries({ queryKey: ["schedules"] });
     } catch (err) {
       setError(serializeError(err));
     } finally {
@@ -91,21 +95,24 @@ export default function AddSchedulePage() {
 
   return (
     <div className="mx-auto max-w-3xl">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-blue-600">Add Schedule</h1>
-        <Link className="text-blue-600 underline" to="/schedules">
+      <div className="mb-4 flex items-center justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">Add Schedule</h1>
+        <Link className="text-sm font-medium text-brand-600 hover:text-brand-700" to="/schedules">
           ← View Schedules
         </Link>
       </div>
 
-      {error && <div className="mb-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
-      {msg && <div className="mb-4 rounded-lg bg-green-50 px-3 py-2 text-sm text-green-600">{msg}</div>}
+      {error && <div className="mb-4 rounded-card bg-red-50 px-3 py-2 text-sm text-red-600">{error}</div>}
+      {loadError && <div className="mb-4 rounded-card bg-red-50 px-3 py-2 text-sm text-red-600">{loadError}</div>}
+      {msg && <div className="mb-4 rounded-card bg-green-50 px-3 py-2 text-sm text-green-600">{msg}</div>}
 
-      <form onSubmit={submit} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <form onSubmit={submit} className="card rounded-panel p-6">
         <h2 className="font-semibold text-slate-800">Schedule Details</h2>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
-            <label className="block text-[11px] font-medium text-slate-400">Bus</label>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Bus
+            </label>
             <select value={bid} onChange={(e) => setBid(e.target.value)} className={inputClass}>
               <option value="">Select bus...</option>
               {buses.map((b) => (
@@ -116,7 +123,9 @@ export default function AddSchedulePage() {
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-slate-400">Travelling date</label>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Travelling date
+            </label>
             <input
               type="date"
               min={minDate}
@@ -126,7 +135,9 @@ export default function AddSchedulePage() {
             />
           </div>
           <div>
-            <label className="block text-[11px] font-medium text-slate-400">Time</label>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Time
+            </label>
             <input
               type="time"
               value={trtime}
@@ -142,8 +153,17 @@ export default function AddSchedulePage() {
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <div>
-            <label className="block text-[11px] font-medium text-slate-400">Route</label>
-            <select value={rid} onChange={(e) => { setRid(e.target.value); setPrice(""); }} className={inputClass}>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Route
+            </label>
+            <select
+              value={rid}
+              onChange={(e) => {
+                setRid(e.target.value);
+                setPrice("");
+              }}
+              className={inputClass}
+            >
               <option value="">No route (add later)</option>
               {routes.map((r) => (
                 <option key={r._id} value={r._id}>
@@ -154,7 +174,9 @@ export default function AddSchedulePage() {
           </div>
           {rid && (
             <div>
-              <label className="block text-[11px] font-medium text-slate-400">Fare (Rs.)</label>
+              <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Fare (Rs.)
+              </label>
               <input
                 type="number"
                 min="0"
@@ -176,11 +198,7 @@ export default function AddSchedulePage() {
         )}
 
         <div className="mt-5">
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-          >
+          <button type="submit" disabled={busy} className="btn-primary">
             {busy ? "Adding..." : "Add schedule"}
           </button>
         </div>

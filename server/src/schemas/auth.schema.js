@@ -25,3 +25,35 @@ export const loginSchema = z.object({
   logid: z.string().min(1, 'Email/Mobile is required'),
   logpass: z.string().min(1, 'Password is required'),
 });
+
+export const updateMeSchema = z
+  .object({
+    uname: z
+      .string()
+      .min(1)
+      .max(25)
+      .regex(/^[a-zA-Z-' ]*$/, 'Name may only contain letters, spaces, apostrophes and hyphens')
+      .optional(),
+    uemail: z.string().email('A valid email is required').optional(),
+    umobile: z.string().regex(/^\d{10}$/, 'Mobile must be exactly 10 digits').optional(),
+    ugender: z.enum(['Female', 'Male', 'Other']).optional(),
+    curpass: z.string().optional(),
+    upass: passwordRule.optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.upass && !data.curpass) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['curpass'],
+        message: 'Current password is required to change your password',
+      });
+    }
+  });
+
+export const forgotPasswordSchema = z.object({
+  uemail: z.string().email('A valid email is required'),
+});
+
+export const resetPasswordSchema = z.object({
+  upass: passwordRule,
+});

@@ -57,7 +57,7 @@ export const listPrices = asyncHandler(async (req, res) => {
 });
 
 export const assignPrice = asyncHandler(async (req, res) => {
-  const { bsid, rid, price } = req.body;
+  const { bsid, rid, price } = req.validated.body;
 
   const schedule = await BusSchedule.findById(bsid);
   if (!schedule) {
@@ -86,8 +86,8 @@ export const assignPrice = asyncHandler(async (req, res) => {
 });
 
 export const updateStatus = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { arstatus } = req.body;
+  const { id } = req.validated.params;
+  const { arstatus } = req.validated.body;
 
   const addroute = await Addroute.findById(id);
   if (!addroute) {
@@ -105,8 +105,8 @@ export const updateStatus = asyncHandler(async (req, res) => {
 });
 
 export const updateRoute = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { rid } = req.body;
+  const { id } = req.validated.params;
+  const { rid } = req.validated.body;
 
   const addroute = await Addroute.findById(id);
   if (!addroute) {
@@ -137,8 +137,8 @@ export const updateRoute = asyncHandler(async (req, res) => {
 });
 
 export const updatePrice = asyncHandler(async (req, res) => {
-  const { id } = req.params;
-  const { price } = req.body;
+  const { id } = req.validated.params;
+  const { price } = req.validated.body;
 
   const addroute = await Addroute.findById(id);
   if (!addroute) {
@@ -169,7 +169,7 @@ export const updatePrice = asyncHandler(async (req, res) => {
 });
 
 export const deleteAddroute = asyncHandler(async (req, res) => {
-  const { id } = req.params;
+  const { id } = req.validated.params;
 
   const addroute = await Addroute.findById(id);
   if (!addroute) {
