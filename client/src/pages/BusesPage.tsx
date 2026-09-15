@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
 import { busesApi } from "../api/buses";
+import { referenceApi } from "../api/reference";
 import { serializeError } from "../api/client";
 import { isAdmin, isStaff } from "../lib/roles";
 import type { Bus } from "../types";
@@ -16,6 +17,12 @@ export default function BusesPage() {
   const busesQuery = useQuery({
     queryKey: ["buses"],
     queryFn: () => busesApi.list().then(({ data }) => data.buses),
+  });
+
+  const busTypesQuery = useQuery({
+    queryKey: ["bus-types", "reference"],
+    queryFn: () => referenceApi.busTypes().then(({ data }) => data.busTypes),
+    enabled: staff,
   });
 
   const patch = (bus: Bus) =>
@@ -54,7 +61,9 @@ export default function BusesPage() {
               bus={b}
               canEdit={staff}
               isAdminRole={isAdminRole}
+              busTypes={busTypesQuery.data ?? []}
               onStatus={(bstatus) => patch({ ...b, bstatus })}
+              onUpdated={patch}
               onDeleted={() => remove(b._id)}
             />
           ))}

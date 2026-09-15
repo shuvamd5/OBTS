@@ -1,6 +1,6 @@
 export type UserRole = "admin" | "operator" | "customer" | "checker";
-export type ScheduleStatus = "not approved" | "going" | "not going" | "pending" | "Expired";
-export type PriceStatus = "unchecked" | "not ok" | "ok" | "Expired";
+export type ScheduleStatus = "pending" | "approved" | "not_going" | "expired";
+export type PriceStatus = "pending" | "approved" | "rejected" | "expired";
 
 export interface User {
   _id: string;
@@ -36,6 +36,8 @@ export interface UpdateProfilePayload {
   upass?: string;
 }
 
+export type RouteStatus = "pending" | "active" | "inactive";
+
 export interface Checkpoint {
   _id: string;
   route: string;
@@ -47,34 +49,42 @@ export interface Route {
   sp: string;
   fp: string;
   checkpoints: Checkpoint[];
+  rstatus: RouteStatus;
+  rsapby: string;
+  distance: number;
+  duration: string;
 }
 
-export type BusStatus = "unchecked" | "active" | "inactive";
+export type BusStatus = "pending" | "active" | "inactive";
+export type SeatStyle = "standard" | "semi-luxury" | "luxury";
 
-export interface Bus {
+export interface BusType {
   _id: string;
-  bcd: string;
-  bno: string;
-  bname: string;
-  btype: "A/C" | "Deluxe" | "Suspension";
-  nseat: 37 | 39;
-  stype: "FOLDABLE" | "SEMI-FOLDABLE" | "UNFOLDABLE";
-  bstatus: BusStatus;
-  bsapby: string;
-  uid?: string | null;
-  ownerName?: string | null;
+  name: string;
+  seatCount: number;
+  seatStyle: SeatStyle;
+  busCount?: number;
+  deletedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
-export interface BusMetaItem {
-  code: string;
-  label: string;
-}
+export type BusBusType = Pick<BusType, "_id" | "name" | "seatCount">;
 
-export interface BusMeta {
-  zoneCodes: BusMetaItem[];
-  vehicleTypes: BusMetaItem[];
+export interface Bus {
+  _id: string;
+  plateNumber: string;
+  busTypeId: string | null;
+  busType: BusBusType | null;
+  bname: string;
+  amenities: string[];
+  bstatus: BusStatus;
+  bsapby: string;
+  uid: string | null;
+  ownerName: string | null;
+  deletedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface SchedulePrice {
@@ -90,9 +100,7 @@ export interface SchedulePrice {
 export interface Schedule {
   _id: string;
   bid: string;
-  bus:
-    | Pick<Bus, "_id" | "bcd" | "bno" | "bname" | "btype" | "nseat" | "bstatus" | "bsapby">
-    | null;
+  bus: Pick<Bus, "_id" | "plateNumber" | "bname" | "amenities" | "bstatus" | "bsapby" | "busType"> | null;
   trdate: string;
   trtime: string;
   bsstatus: ScheduleStatus;
@@ -116,7 +124,7 @@ export interface PriceEntry {
     bsstatus: ScheduleStatus;
     bssapby: string;
   } | null;
-  bus?: Pick<Bus, "_id" | "bcd" | "bno" | "bname" | "btype" | "bstatus"> | null;
+  bus?: Pick<Bus, "_id" | "plateNumber" | "bname" | "bstatus" | "amenities" | "busType"> | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -129,13 +137,15 @@ export interface AppStats {
   total: number;
 }
 
-export type SeatStatus = "E" | "P" | "R";
+export type SeatStatus = "available" | "held" | "reserved";
+export type TicketStatus = "E" | "P" | "R";
 
 export interface OfferSeat {
   sno: number;
   blc: string;
   sna: string;
   status: SeatStatus;
+  lockExpiry?: string | null;
 }
 
 export interface OfferRow {
@@ -143,23 +153,26 @@ export interface OfferRow {
   seats: number[];
 }
 
+export interface OfferBus {
+  bid: string;
+  bname: string;
+  plateNumber: string;
+  busType: { _id: string | null; name: string | null; seatCount: number } | null;
+  amenities: string[];
+}
+
 export interface BookingOffer {
   arid: string;
   bsid: string;
   bid: string;
-  bname: string;
-  bcd: string;
-  bno: string;
-  btype: string;
-  stype: string;
-  nseat: number;
+  bus: OfferBus;
   trdate: string;
   trtime: string;
   route: { rid: string; sp: string; fp: string };
   query: { sp: string; fp: string };
   cpid: { sp: number; fp: number };
   price: number;
-  counts: { E: number; P: number; R: number };
+  counts: { available: number; held: number; reserved: number };
   seats: OfferSeat[];
   rows: OfferRow[];
 }
@@ -178,7 +191,7 @@ export interface BookingResult {
     price: number;
     uid: string;
     treby: string;
-    tstatus: SeatStatus;
+    tstatus: TicketStatus;
     payment: string;
     pyreby: string;
   };
@@ -195,11 +208,9 @@ export interface BookingResult {
   };
   bus: {
     bname: string;
-    bcd: string;
-    bno: string;
-    btype: string;
-    stype: string;
-    nseat: number;
+    plateNumber: string;
+    busType: { _id: string | null; name: string | null; seatCount: number } | null;
+    amenities: string[];
   };
   price: number;
 }

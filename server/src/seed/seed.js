@@ -3,6 +3,7 @@ import { connectDB, disconnectDB } from '../config/db.js';
 import Location from '../models/Location.js';
 import User from '../models/User.js';
 import { LOCATIONS } from './locations.js'
+import BusType from '../models/BusType.js';
 
 const DEFAULT_USERS = [
   {
@@ -31,6 +32,14 @@ const DEFAULT_USERS = [
   },
 ];
 
+const DEFAULT_BUS_TYPES = [
+  { name: 'Express', seatCount: 29, seatStyle: 'standard' },
+  { name: 'Deluxe', seatCount: 33, seatStyle: 'semi-luxury' },
+  { name: 'AC Deluxe', seatCount: 37, seatStyle: 'luxury' },
+  { name: 'Sleeper', seatCount: 41, seatStyle: 'semi-luxury' },
+  { name: 'Sleeper Luxury', seatCount: 45, seatStyle: 'luxury' },
+];
+
 async function seedLocations() {
   const sorted = [...LOCATIONS].sort((a, b) => a.localeCompare(b));
   let created = 0;
@@ -44,6 +53,18 @@ async function seedLocations() {
   }
   const total = await Location.countDocuments();
   console.log(`[seed] locations upserted=${created} total=${total}`);
+}
+
+async function seedBusTypes() {
+  for (const bt of DEFAULT_BUS_TYPES) {
+    await BusType.findOneAndUpdate(
+      { name: bt.name },
+      { $set: { seatCount: bt.seatCount, seatStyle: bt.seatStyle, deletedAt: null } },
+      { upsert: true }
+    );
+  }
+  const total = await BusType.countDocuments({ deletedAt: null });
+  console.log(`[seed] busTypes total=${total}`);
 }
 
 async function seedUsers() {
@@ -84,6 +105,7 @@ async function main() {
   await connectDB();
   await seedLocations();
   await seedUsers();
+  await seedBusTypes();
   await disconnectDB();
   console.log('[seed] done');
 }

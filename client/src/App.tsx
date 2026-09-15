@@ -2,7 +2,7 @@ import { Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import Layout from "./components/Layout";
-import { isStaff } from "./lib/roles";
+import { isAdmin, isStaff } from "./lib/roles";
 import HomePage from "./pages/HomePage";
 import BookingPage from "./pages/BookingPage";
 import LoginPage from "./pages/LoginPage";
@@ -14,6 +14,10 @@ import RoutesPage from "./pages/RoutesPage";
 import AddRoutePage from "./pages/AddRoutePage";
 import BusesPage from "./pages/BusesPage";
 import AddBusPage from "./pages/AddBusPage";
+import BusDetailPage from "./pages/BusDetailPage";
+import ManageBusTypesPage from "./pages/ManageBusTypesPage";
+import AddBusTypePage from "./pages/AddBusTypePage";
+import ManageLocationsPage from "./pages/ManageLocationsPage";
 import SchedulesPage from "./pages/SchedulesPage";
 import AddSchedulePage from "./pages/AddSchedulePage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
@@ -23,6 +27,14 @@ import type { ReactNode } from "react";
 function StaffRoute({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   if (!isStaff(user)) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
+
+function AdminRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  if (!isAdmin(user)) {
     return <Navigate to="/" replace />;
   }
   return <>{children}</>;
@@ -42,6 +54,10 @@ export default function App() {
           <Route path="/routes/add" element={<ProtectedRoute><StaffRoute><AddRoutePage /></StaffRoute></ProtectedRoute>} />
           <Route path="/buses" element={<ProtectedRoute><BusesPage /></ProtectedRoute>} />
           <Route path="/buses/add" element={<ProtectedRoute><StaffRoute><AddBusPage /></StaffRoute></ProtectedRoute>} />
+          <Route path="/buses/:id" element={<ProtectedRoute><BusDetailPage /></ProtectedRoute>} />
+          <Route path="/bus-types" element={<ProtectedRoute><AdminRoute><ManageBusTypesPage /></AdminRoute></ProtectedRoute>} />
+          <Route path="/bus-types/add" element={<ProtectedRoute><AdminRoute><AddBusTypePage /></AdminRoute></ProtectedRoute>} />
+          <Route path="/locations" element={<ProtectedRoute><AdminRoute><ManageLocationsPage /></AdminRoute></ProtectedRoute>} />
           <Route path="/schedules" element={<ProtectedRoute><SchedulesPage /></ProtectedRoute>} />
           <Route path="/schedules/add" element={<ProtectedRoute><StaffRoute><AddSchedulePage /></StaffRoute></ProtectedRoute>} />
         </Route>

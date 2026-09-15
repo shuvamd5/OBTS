@@ -16,9 +16,9 @@ export default function TicketDisplay({
   const rows: [string, string][] = [
     ["Name", result.ticket.treby],
     ["Bus name", result.bus.bname],
-    ["Num plate", result.bus.bcd],
-    ["type", result.bus.btype],
-    ["seat type", result.bus.stype],
+    ["Plate number", result.bus.plateNumber],
+    ["Bus type", result.bus.busType?.name ?? "—"],
+    ["Seats", result.bus.busType ? String(result.bus.busType.seatCount) : "—"],
     ["Travel", `${offer.query.sp} > ${offer.query.fp}`],
     ["date and time", `${offer.trdate} ${offer.trtime}`],
     ["Seat no", `${seat.blc} ${seat.sna}`],

@@ -2,7 +2,7 @@ import { NavLink, Outlet, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "../auth/AuthContext";
 import { statsApi } from "../api/stats";
-import { isStaff } from "../lib/roles";
+import { isAdmin, isStaff } from "../lib/roles";
 import type { AppStats } from "../types";
 
 const linkClass = ({ isActive }: { isActive: boolean }) =>
@@ -28,7 +28,7 @@ export default function Layout() {
   });
   const stats = user ? (statsQuery.data ?? null) : null;
 
-  const schedulesBadge = staff ? (stats?.schedules ?? 0) + (stats?.prices ?? 0) : 0;
+  const schedulesBadge = staff ? (stats?.schedules ?? 0) : 0;
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
@@ -54,6 +54,16 @@ export default function Layout() {
                 <NavLink to="/routes" className={linkClass}>
                   Routes
                 </NavLink>
+                {isAdmin(user) && (
+                  <>
+                    <NavLink to="/bus-types" className={linkClass}>
+                      Bus Types
+                    </NavLink>
+                    <NavLink to="/locations" className={linkClass}>
+                      Locations
+                    </NavLink>
+                  </>
+                )}
                 <NavLink to="/profile" className={linkClass}>
                   Profile
                 </NavLink>

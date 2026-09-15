@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
 
-export const SEAT_STATUSES = ['E', 'P', 'R'];
+export const SEAT_STATUSES = ['available', 'held', 'reserved'];
 
 const seatSchema = new mongoose.Schema(
   {
-    arid: { type: mongoose.Schema.Types.ObjectId, ref: 'Addroute', required: true },
+    arid: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduleRoute', required: true },
     sno: { type: Number, required: true },
     sp: { type: String, required: true },
     spcpid: { type: Number, required: true },
@@ -13,6 +13,7 @@ const seatSchema = new mongoose.Schema(
     price: { type: Number, required: true, min: 0 },
     uid: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     status: { type: String, enum: SEAT_STATUSES, required: true },
+    lockExpiry: { type: Date, default: null },
     trdate: { type: Date, required: true },
     trtime: { type: String, required: true },
   },

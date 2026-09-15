@@ -1,22 +1,25 @@
 import mongoose from 'mongoose';
-import { BUS_STATUSES, BUS_TYPES, BUS_SEATS, SEAT_STYLES } from '../domain/busmeta.js';
+import { BUS_STATUSES } from '../domain/busmeta.js';
 
 const busSchema = new mongoose.Schema(
   {
-    bcd: { type: String, required: true },
-    bno: { type: String, required: true },
+    plateNumber: { type: String, required: true, trim: true, uppercase: true },
+    busTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'BusType', required: true },
     bname: { type: String, required: true },
-    btype: { type: String, enum: BUS_TYPES, required: true },
-    nseat: { type: Number, enum: BUS_SEATS, required: true },
-    stype: { type: String, enum: SEAT_STYLES, required: true },
-    bstatus: { type: String, enum: BUS_STATUSES, default: 'unchecked' },
+    amenities: { type: [String], default: [] },
+    bstatus: { type: String, enum: BUS_STATUSES, default: 'pending' },
     bsapby: { type: String, default: 'none' },
     uid: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
-busSchema.index({ bcd: 1, bno: 1 }, { unique: true });
+// Unique per live bus only: a soft-deleted bus's plate must be re-usable.
+busSchema.index(
+  { plateNumber: 1 },
+  { unique: true, partialFilterExpression: { deletedAt: null } }
+);
 
 const Bus = mongoose.model('Bus', busSchema);
 

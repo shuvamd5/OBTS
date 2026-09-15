@@ -1,7 +1,7 @@
 import api from "./client";
-import type { BusMeta } from "../types";
+import type { BusType } from "../types";
 
 export const referenceApi = {
   locations: () => api.get<{ locations: string[] }>("/reference/locations"),
-  busMeta: () => api.get<BusMeta>("/reference/bus-meta"),
+  busTypes: () => api.get<{ busTypes: BusType[] }>("/reference/bus-types"),
 };

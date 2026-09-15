@@ -8,7 +8,7 @@
     "dev": "tsx watch src/index.js",
     "start": "tsx src/index.js",
     "seed": "tsx src/seed/seed.js",
-    "test": "node --import tsx --test tests/*.test.mjs",
+    "test": "node --import tsx --test --test-concurrency=1 tests/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "license": "ISC",

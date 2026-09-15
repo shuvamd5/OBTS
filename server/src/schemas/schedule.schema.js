@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { SCHEDULE_STATUSES } from '../models/BusSchedule.js';
 
-const EDITABLE = SCHEDULE_STATUSES.filter((s) => s !== 'Expired');
+const EDITABLE = SCHEDULE_STATUSES.filter((s) => s !== 'expired');
 
 export const scheduleCreateSchema = z.object({
   bid: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid bus id'),

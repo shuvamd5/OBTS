@@ -25,6 +25,9 @@ export default function AddRoutePage() {
   const [fp, setFp] = useState("");
   const [checkpoints, setCheckpoints] = useState<NewCheckpoint[]>([]);
 
+  const [distance, setDistance] = useState("");
+  const [duration, setDuration] = useState("");
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
@@ -61,6 +64,15 @@ export default function AddRoutePage() {
       setError("Start point and end point must be different towns.");
       return;
     }
+    const numDistance = Number(distance);
+    if (distance === "" || !Number.isFinite(numDistance) || numDistance <= 0) {
+      setError("Distance is required and must be a positive number of km.");
+      return;
+    }
+    if (duration.trim() === "") {
+      setError("Estimated duration is required (e.g. 6h 30m).");
+      return;
+    }
 
     const filled = checkpoints.filter((c) => c.route || c.price !== "");
     if (filled.some((c) => !c.route || c.price === "")) {
@@ -79,7 +91,7 @@ export default function AddRoutePage() {
 
     setBusy(true);
     try {
-      const { data } = await routesApi.create(sp, fp);
+      const { data } = await routesApi.create(sp, fp, numDistance, duration.trim());
       const routeId = data.route._id;
 
       for (const c of filled) {
@@ -88,6 +100,8 @@ export default function AddRoutePage() {
 
       setSp("");
       setFp("");
+      setDistance("");
+      setDuration("");
       setCheckpoints([]);
       setMsg("Route created successfully. Add another below.");
     } catch (err) {
@@ -135,6 +149,33 @@ export default function AddRoutePage() {
                 <option key={t} value={t}>{t}</option>
               ))}
           </select>
+        </div>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <div>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Distance (km)
+            </label>
+            <input
+              type="number"
+              min="0"
+              placeholder="e.g. 200"
+              className={inputClass}
+              value={distance}
+              onChange={(e) => setDistance(e.target.value)}
+            />
+          </div>
+          <div>
+            <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+              Estimated duration
+            </label>
+            <input
+              type="text"
+              placeholder="e.g. 6h 30m"
+              className={inputClass}
+              value={duration}
+              onChange={(e) => setDuration(e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="mt-5 flex items-center justify-between">

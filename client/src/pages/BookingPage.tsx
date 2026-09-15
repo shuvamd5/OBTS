@@ -178,7 +178,7 @@ export default function BookingPage() {
             <div className="mt-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
               <span className="text-slate-500">Bus</span>
               <span className="font-medium">
-                {picked.offer.bname} ({picked.offer.bcd} {picked.offer.bno})
+                {picked.offer.bus.bname} ({picked.offer.bus.plateNumber})
               </span>
               <span className="text-slate-500">Travel</span>
               <span className="font-medium">

@@ -13,11 +13,14 @@ interface RoutesResponse {
 export const routesApi = {
   list: () => api.get<RoutesResponse>("/routes"),
 
-  create: (sp: string, fp: string) =>
-    api.post<RouteResponse>("/routes", { sp, fp }),
+  create: (sp: string, fp: string, distance: number, duration: string) =>
+    api.post<RouteResponse>("/routes", { sp, fp, distance, duration }),
 
-  update: (id: string, data: { sp?: string; fp?: string }) =>
+  update: (id: string, data: { sp?: string; fp?: string; distance?: number; duration?: string }) =>
     api.patch<RouteResponse>(`/routes/${id}`, data),
+
+  updateStatus: (id: string, rstatus: Route["rstatus"]) =>
+    api.patch<RouteResponse>(`/routes/${id}/status`, { rstatus }),
 
   addCheckpoint: (id: string, route: string, price: number) =>
     api.post<RouteResponse>(`/routes/${id}/checkpoints`, { route, price }),

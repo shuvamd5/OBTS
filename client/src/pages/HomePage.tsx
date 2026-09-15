@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { isStaff } from "../lib/roles";
+import { isAdmin, isStaff } from "../lib/roles";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -52,6 +52,14 @@ export default function HomePage() {
           <Link to="/users" className="mt-2 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
             Manage Users →
           </Link>
+          {isAdmin(user) && (
+            <>
+              <span className="mx-2 text-slate-300">·</span>
+              <Link to="/bus-types" className="mt-2 inline-block text-sm font-medium text-brand-600 hover:text-brand-700">
+                Manage Bus Types →
+              </Link>
+            </>
+          )}
         </div>
       )}
     </div>

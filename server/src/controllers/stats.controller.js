@@ -1,6 +1,6 @@
 import Bus from '../models/Bus.js';
 import BusSchedule from '../models/BusSchedule.js';
-import Addroute from '../models/Addroute.js';
+import ScheduleRoute from '../models/ScheduleRoute.js';
 import Ticket from '../models/Ticket.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 
@@ -11,7 +11,7 @@ export const getStats = asyncHandler(async (req, res) => {
   let ownBusIds = null;
   let ownBusFilter = {};
   if (user.ustatus === 'operator') {
-    const own = await Bus.find({ uid: user._id }).select('_id').lean();
+    const own = await Bus.find({ uid: user._id, deletedAt: null }).select('_id').lean();
     ownBusIds = own.map((b) => b._id);
     ownBusFilter = { _id: { $in: ownBusIds } };
   }
@@ -23,7 +23,10 @@ export const getStats = asyncHandler(async (req, res) => {
     pendingFilter = { tstatus: 'P' };
   } else if (user.ustatus === 'operator') {
     const ownScheds = await BusSchedule.find({ bid: { $in: ownBusIds } }).select('_id').lean();
-    const ownArs = await Addroute.find({ bsid: { $in: ownScheds.map((s) => s._id) } })
+    const ownArs = await ScheduleRoute.find({
+      bsid: { $in: ownScheds.map((s) => s._id) },
+      deletedAt: null,
+    })
       .select('_id')
       .lean();
     pendingFilter = { tstatus: 'P', arid: { $in: ownArs.map((a) => a._id) } };
@@ -34,26 +37,44 @@ export const getStats = asyncHandler(async (req, res) => {
 
   const buses =
     user.ustatus === 'admin'
-      ? await Bus.countDocuments({ bstatus: { $ne: 'active' } })
+      ? await Bus.countDocuments({ deletedAt: null, bstatus: { $ne: 'active' } })
       : user.ustatus === 'operator'
-      ? await Bus.countDocuments({ ...ownBusFilter, bstatus: { $ne: 'active' } })
+      ? await Bus.countDocuments({ ...ownBusFilter, deletedAt: null, bstatus: { $ne: 'active' } })
       : 0;
 
   const schedules = isStaff
     ? await BusSchedule.countDocuments({
         ...(user.ustatus === 'operator' ? { bid: { $in: ownBusIds } } : {}),
-        bsstatus: { $nin: ['going', 'Expired'] },
+        bsstatus: { $nin: ['approved', 'expired'] },
+        deletedAt: null,
       })
     : 0;
 
   let prices = 0;
   if (user.ustatus === 'admin') {
-    prices = await Addroute.countDocuments({ arstatus: { $nin: ['ok', 'Expired'] } });
+    const liveScheds = await BusSchedule.find({
+      bsstatus: { $ne: 'expired' },
+      deletedAt: null,
+    })
+      .select('_id')
+      .lean();
+    prices = await ScheduleRoute.countDocuments({
+      bsid: { $in: liveScheds.map((s) => s._id) },
+      arstatus: { $nin: ['approved', 'expired'] },
+      deletedAt: null,
+    });
   } else if (user.ustatus === 'operator') {
-    const ownScheds = await BusSchedule.find({ bid: { $in: ownBusIds } }).select('_id').lean();
-    prices = await Addroute.countDocuments({
+    const ownScheds = await BusSchedule.find({
+      bid: { $in: ownBusIds },
+      bsstatus: { $ne: 'expired' },
+      deletedAt: null,
+    })
+      .select('_id')
+      .lean();
+    prices = await ScheduleRoute.countDocuments({
       bsid: { $in: ownScheds.map((s) => s._id) },
-      arstatus: { $nin: ['ok', 'Expired'] },
+      arstatus: { $nin: ['approved', 'expired'] },
+      deletedAt: null,
     });
   }
 

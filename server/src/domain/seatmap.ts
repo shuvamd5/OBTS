@@ -2,58 +2,40 @@
 
 import type { SeatInfo, SeatLayout, SeatRow } from '../../../shared/domain.js';
 
-const LABELS_37 = [
-  'H', '2', '4', '6', '8', '10', '12', '14', '16',
-  'G', '1', '3', '5', '7', '9', '11', '13', '15',
-  '17',
-  '\u0915', '2', '4', '6', '8', '10', '12', '14', '16',
-  '\u0916', '1', '3', '5', '7', '9', '11', '13', '15',
-];
+const cache = new Map<number, SeatLayout>();
 
-const LABELS_39 = [
-  '2', '4', '6', '8', '10', '12', '14', '16', '18', '20',
-  '1', '3', '5', '7', '9', '11', '13', '15', '17', '19',
-  '19',
-  '2', '4', '6', '8', '10', '12', '14', '16', '18',
-  '1', '3', '5', '7', '9', '11', '13', '15', '17',
-];
+export function generateSeatMap(n: number): SeatLayout {
+  if (!Number.isInteger(n) || n <= 28 || n % 2 === 0)
+    throw new Error(`Invalid seat count: ${n}`);
+  const base = Math.floor((n - 1) / 4);
+  const rowSizes = [base, base, 1, base, base];
+  const rem = n - rowSizes.reduce((a, b) => a + b, 0);
+  if (rem >= 1) rowSizes[0] += 1;
+  if (rem >= 2) rowSizes[1] += 1;
 
-const BLOCK_B_37 = 18;
-const BLOCK_B_39 = 20;
+  const labels = Array.from({ length: n }, (_, i) => `${i + 1}`);
+  const names: (string | null)[] = ['Driver', null, 'Corridor', null, 'Door'];
+  const rows: SeatRow[] = [];
+  let iter = 0;
+  rowSizes.forEach((count, i) => {
+    rows.push({ left: names[i], seats: Array.from({ length: count }, () => iter++) });
+  });
 
-const ROWS_37: SeatRow[] = [
-  { left: 'Driver', seats: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
-  { left: null, seats: [9, 10, 11, 12, 13, 14, 15, 16, 17] },
-  { left: 'Corridor', seats: [18] },
-  { left: null, seats: [19, 20, 21, 22, 23, 24, 25, 26, 27] },
-  { left: 'Door', seats: [28, 29, 30, 31, 32, 33, 34, 35, 36] },
-];
-
-const ROWS_39: SeatRow[] = [
-  { left: 'Driver', seats: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9] },
-  { left: null, seats: [10, 11, 12, 13, 14, 15, 16, 17, 18, 19] },
-  { left: 'Corridor', seats: [20] },
-  { left: null, seats: [21, 22, 23, 24, 25, 26, 27, 28, 29] },
-  { left: null, seats: [30, 31, 32, 33, 34, 35, 36, 37, 38] },
-];
-
-const LAYOUTS: Record<number, SeatLayout> = {
-  37: { labels: LABELS_37, rows: ROWS_37, blockB: BLOCK_B_37 },
-  39: { labels: LABELS_39, rows: ROWS_39, blockB: BLOCK_B_39 },
-};
-
-export function layoutFor(nseat: number): SeatLayout {
-  return LAYOUTS[nseat] ?? LAYOUTS[37];
+  return { labels, rows, blockB: rowSizes[0] + rowSizes[1] };
 }
 
-export function seatAt(nseat: number, iter: number): SeatInfo | null {
-  const layout = layoutFor(nseat);
-  if (!layout.labels[iter]) return null;
-  return {
-    sno: iter + 1,
-    blc: iter < layout.blockB ? 'B' : 'A',
-    sna: layout.labels[iter],
-  };
+export function layoutFor(n: number): SeatLayout {
+  const hit = cache.get(n);
+  if (hit) return hit;
+  const layout = generateSeatMap(n);
+  cache.set(n, layout);
+  return layout;
 }
 
-export const seatRows = (nseat: number): SeatRow[] => layoutFor(nseat).rows;
+export function seatAt(n: number, iter: number): SeatInfo | null {
+  if (iter < 0 || iter >= n) return null;
+  const layout = layoutFor(n);
+  return { sno: iter + 1, blc: iter < layout.blockB ? 'B' : 'A', sna: layout.labels[iter] };
+}
+
+export const seatRows = (n: number): SeatRow[] => layoutFor(n).rows;

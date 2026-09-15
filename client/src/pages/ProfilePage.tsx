@@ -29,7 +29,6 @@ export default function ProfilePage() {
 
   return (
     <div className="mx-auto w-full max-w-md">
-      <h1 className="mb-4 text-2xl font-bold tracking-tight text-slate-900">Profile</h1>
       <div className="card rounded-panel p-6">
         <div className="flex items-center justify-between">
           <div>

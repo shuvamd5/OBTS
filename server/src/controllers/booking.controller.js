@@ -1,4 +1,4 @@
-import Addroute from '../models/Addroute.js';
+import ScheduleRoute from '../models/ScheduleRoute.js';
 import BusSchedule from '../models/BusSchedule.js';
 import Bus from '../models/Bus.js';
 import Route from '../models/Route.js';
@@ -11,7 +11,40 @@ import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { runInTransaction } from '../utils/tx.js';
 
 const DAY = 86400000;
+const HOLD_MS = 10 * 60 * 1000; // 10 min seat lock
 const startOfDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+
+const releaseExpiredHeld = async () => {
+  const expired = await Seat.find({ status: 'held', lockExpiry: { $lt: new Date() } }).select('_id').lean();
+  if (expired.length === 0) return;
+  const ids = expired.map((s) => s._id);
+
+  const tickets = await Ticket.find({ ssid: { $in: ids }, tstatus: 'P' })
+    .select('uid price')
+    .lean();
+  await Ticket.deleteMany({ ssid: { $in: ids } });
+
+  // Reverse the user ledger for pending bookings whose holds just expired. Held
+  // seats created by the standalone hold endpoint have no ticket and no ledger
+  // increment, so they are excluded from the reversal.
+  const perUser = new Map();
+  for (const t of tickets) {
+    const key = String(t.uid);
+    const cur = perUser.get(key) ?? { count: 0, price: 0 };
+    cur.count += 1;
+    cur.price += t.price;
+    perUser.set(key, cur);
+  }
+
+  await Seat.deleteMany({ _id: { $in: ids } });
+
+  for (const [uid, { count, price }] of perUser) {
+    await User.updateOne(
+      { _id: uid },
+      { $inc: { totaltc: -count, pendingtc: -count, due: -price, points: -count } }
+    );
+  }
+};
 
 // cpid : route origin = 0, route final = 100, checkpoints 1 to n.
 function segmentFor(route, price, sp, fp) {
@@ -50,39 +83,47 @@ const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
   const seg = segmentFor(route, addroute.price, sp, fp);
   if (!seg) return null;
 
-  const occupied = await Seat.find({ arid: addroute._id }).select('sno spcpid fpcpid status').lean();
+  const busType = bus.busTypeId ?? {};
+  const seatCount = busType.seatCount ?? 37;
+  await releaseExpiredHeld();
+  const occupied = await Seat.find({ arid: addroute._id })
+    .select('sno spcpid fpcpid status lockExpiry')
+    .lean();
   const bySeat = new Map();
   for (const s of occupied) {
     if (!bySeat.has(s.sno)) bySeat.set(s.sno, []);
     bySeat.get(s.sno).push(s);
   }
 
-  const counts = { E: 0, R: 0, P: 0 };
+  const counts = { available: 0, held: 0, reserved: 0 };
   const seats = [];
-  for (let iter = 0; iter < bus.nseat; iter++) {
-    const def = seatAt(bus.nseat, iter);
-    let status = 'E';
+  for (let iter = 0; iter < seatCount; iter++) {
+    const def = seatAt(seatCount, iter);
+    let status = 'available';
+    let lockExpiry = null;
     const rows = bySeat.get(def.sno) ?? [];
     for (const row of rows) {
       if (overlaps(seg.scpid, seg.fcpid, row.spcpid, row.fpcpid)) {
         status = row.status;
+        lockExpiry = row.lockExpiry ?? null;
         break;
       }
     }
     counts[status]++;
-    seats.push({ sno: def.sno, blc: def.blc, sna: def.sna, status });
+    seats.push({ sno: def.sno, blc: def.blc, sna: def.sna, status, lockExpiry });
   }
 
   return {
     arid: addroute._id,
     bsid: schedule._id,
     bid: bus._id,
-    bname: bus.bname,
-    bcd: bus.bcd,
-    bno: bus.bno,
-    btype: bus.btype,
-    stype: bus.stype,
-    nseat: bus.nseat,
+    bus: {
+      bid: bus._id,
+      bname: bus.bname,
+      plateNumber: bus.plateNumber,
+      busType: { _id: busType._id ?? null, name: busType.name ?? null, seatCount },
+      amenities: bus.amenities ?? [],
+    },
     trdate: schedule.trdate,
     trtime: schedule.trtime,
     route: { rid: route._id, sp: route.sp, fp: route.fp },
@@ -91,7 +132,7 @@ const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
     price: seg.price,
     counts,
     seats,
-    rows: seatRows(bus.nseat),
+    rows: seatRows(seatCount),
   };
 };
 
@@ -115,17 +156,24 @@ export const searchOffers = asyncHandler(async (req, res) => {
   const rids = routes.filter((r) => routeMatches(r, sp, fp)).map((r) => r._id);
   if (rids.length === 0) return res.json({ offers: [] });
 
-  const prices = await Addroute.find({ rid: { $in: rids }, arstatus: 'ok' }).lean();
+  const prices = await ScheduleRoute.find({
+    rid: { $in: rids },
+    arstatus: 'approved',
+    deletedAt: null,
+  }).lean();
   const bsidList = prices.map((p) => p.bsid);
   const schedules = await BusSchedule.find({
     _id: { $in: bsidList },
-    bsstatus: { $ne: 'Expired' },
+    bsstatus: { $ne: 'expired' },
+    deletedAt: null,
     trdate: t0,
   }).lean();
 
   const schedMap = new Map(schedules.map((s) => [String(s._id), s]));
   const busIds = [...new Set(schedules.map((s) => String(s.bid)))];
-  const buses = await Bus.find({ _id: { $in: busIds } }).lean();
+  const buses = await Bus.find({ _id: { $in: busIds }, deletedAt: null, bstatus: 'active' })
+    .populate('busTypeId', 'name seatCount')
+    .lean();
   const busMap = new Map(buses.map((b) => [String(b._id), b]));
   const routeMap = new Map(routes.map((r) => [String(r._id), r]));
 
@@ -148,14 +196,16 @@ export const searchOffers = asyncHandler(async (req, res) => {
 });
 
 const findEligible = async (arid) => {
-  const addroute = await Addroute.findById(arid);
-  if (!addroute) throw new AppError(404, 'Price entry not found');
+  const addroute = await ScheduleRoute.findById(arid);
+  if (!addroute || addroute.deletedAt) throw new AppError(404, 'Price entry not found');
   const schedule = await BusSchedule.findById(addroute.bsid);
-  if (!schedule) throw new AppError(404, 'Schedule not found');
+  if (!schedule || schedule.deletedAt) throw new AppError(404, 'Schedule not found');
   const route = await Route.findById(addroute.rid);
   if (!route) throw new AppError(404, 'Route not found');
-  const bus = await Bus.findById(schedule.bid);
-  if (!bus) throw new AppError(404, 'Bus not found');
+  const bus = await Bus.findOne({ _id: schedule.bid, deletedAt: null, bstatus: 'active' })
+    .populate('busTypeId', 'name seatCount')
+    .lean();
+  if (!bus) throw new AppError(400, 'Bus is not available for booking');
   return { addroute, schedule, route, bus };
 };
 
@@ -164,10 +214,10 @@ const createBooking = async (req, res, action) => {
 
   const { addroute, schedule, route, bus } = await findEligible(arid);
 
-  if (addroute.arstatus !== 'ok') {
+  if (addroute.arstatus !== 'approved') {
     throw new AppError(400, 'Price entry is not available for booking');
   }
-  if (schedule.bsstatus === 'Expired') {
+  if (schedule.bsstatus === 'expired') {
     throw new AppError(400, 'Schedule has expired');
   }
   if (startOfDay(schedule.trdate) < startOfDay(new Date())) {
@@ -177,20 +227,23 @@ const createBooking = async (req, res, action) => {
   const seg = segmentFor(route, addroute.price, sp, fp);
   if (!seg) throw new AppError(400, 'Invalid travel segment');
 
-  const seatDef = seatAt(bus.nseat, sno - 1);
+  const seatCount = bus.busTypeId?.seatCount ?? 37;
+  const seatDef = seatAt(seatCount, sno - 1);
   if (!seatDef) throw new AppError(400, 'Invalid seat number');
 
+  await releaseExpiredHeld();
   const occupied = await Seat.find({ arid, sno }).select('spcpid fpcpid status').lean();
   for (const row of occupied) {
     if (!overlaps(seg.scpid, seg.fcpid, row.spcpid, row.fpcpid)) continue;
-    if (row.status === 'R') throw new AppError(409, 'the selected seat has been reserved');
+    if (row.status === 'reserved') throw new AppError(409, 'the selected seat has been reserved');
     throw new AppError(
       409,
       action === 'confirm' ? 'the selected seat is kept on-hold' : 'the selected seat is on-hold'
     );
   }
 
-  const status = action === 'confirm' ? 'R' : 'P';
+  const seatStatus = action === 'confirm' ? 'reserved' : 'held';
+  const ticketStatus = action === 'confirm' ? 'R' : 'P';
   const { ticket, seat } = await runInTransaction(async (session) => {
     const s = session ? { session } : {};
 
@@ -207,7 +260,8 @@ const createBooking = async (req, res, action) => {
             fpcpid: seg.fcpid,
             price: seg.price,
             uid: req.user._id,
-            status,
+            status: seatStatus,
+            lockExpiry: action === 'confirm' ? null : new Date(Date.now() + HOLD_MS),
             trdate: schedule.trdate,
             trtime: schedule.trtime,
           },
@@ -242,7 +296,7 @@ const createBooking = async (req, res, action) => {
           price: seg.price,
           uid: req.user._id,
           treby: req.user.uname,
-          tstatus: status,
+          tstatus: ticketStatus,
           payment: 'due',
           pyreby: 'none',
         },
@@ -258,15 +312,14 @@ const createBooking = async (req, res, action) => {
     seat,
     bus: {
       bname: bus.bname,
-      bcd: bus.bcd,
-      bno: bus.bno,
-      btype: bus.btype,
-      stype: bus.stype,
-      nseat: bus.nseat,
+      plateNumber: bus.plateNumber,
+      busType: { _id: bus.busTypeId?._id ?? null, name: bus.busTypeId?.name ?? null, seatCount: bus.busTypeId?.seatCount ?? 37 },
+      amenities: bus.amenities ?? [],
     },
     price: seg.price,
   });
 };
 
+export { findEligible, segmentFor, overlaps };
 export const createPendingBooking = asyncHandler((req, res) => createBooking(req, res, 'pending'));
 export const createConfirmBooking = asyncHandler((req, res) => createBooking(req, res, 'confirm'));

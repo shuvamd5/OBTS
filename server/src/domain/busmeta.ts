@@ -22,10 +22,7 @@ export const VEHICLE_TYPES: Record<string, string> = {
   KHA: 'ख',
 };
 
-export const BUS_TYPES: readonly string[] = ['A/C', 'Deluxe', 'Suspension'];
-export const BUS_SEATS = [37, 39] as const;
-export const SEAT_STYLES: readonly string[] = ['FOLDABLE', 'SEMI-FOLDABLE', 'UNFOLDABLE'];
-export const BUS_STATUSES: readonly string[] = ['unchecked', 'active', 'inactive'];
+export const BUS_STATUSES: readonly string[] = ['pending', 'active', 'inactive'];
 
 export const busMeta = (): BusMetaInfo => ({
   zoneCodes: Object.entries(ZONE_CODES).map(([code, label]) => ({ code, label } as CodeLabel)),

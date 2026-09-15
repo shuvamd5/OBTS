@@ -1,18 +1,19 @@
 import type { PriceStatus, ScheduleStatus } from "../../types";
+import { statusLabel } from "../../lib/status";
 import Pill from "../ui/Pill";
 
 export default function StatusPill({ status }: { status: ScheduleStatus | PriceStatus }) {
   const dot =
-    status === "going" || status === "ok"
+    status === "approved"
       ? "green"
-      : status === "not going" || status === "not ok"
+      : status === "not_going" || status === "rejected"
       ? "red"
-      : status === "Expired"
+      : status === "expired"
       ? "slate"
       : "amber";
   return (
     <Pill className="capitalize" dot={dot}>
-      {status}
+      {statusLabel(status)}
     </Pill>
   );
 }

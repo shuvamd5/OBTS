@@ -5,9 +5,12 @@ import routeRoutes from './route.routes.js';
 import referenceRoutes from './reference.routes.js';
 import busRoutes from './bus.routes.js';
 import scheduleRoutes from './schedule.routes.js';
-import addrouteRoutes from './addroute.routes.js';
+import scheduleRouteRoutes from './scheduleRoute.routes.js';
 import statsRoutes from './stats.routes.js';
 import bookingRoutes from './booking.routes.js';
+import seatRoutes from './seat.routes.js';
+import busTypeRoutes from './busType.routes.js';
+import locationRoutes from './location.routes.js';
 
 const router = Router();
 
@@ -16,8 +19,11 @@ router.use('/users', userRoutes);
 router.use('/routes', routeRoutes);
 router.use('/reference', referenceRoutes);
 router.use('/buses', busRoutes);
+router.use('/bus-types', busTypeRoutes);
+router.use('/locations', locationRoutes);
 router.use('/schedules', scheduleRoutes);
-router.use('/prices', addrouteRoutes);
+router.use('/prices', scheduleRouteRoutes);
+router.use('/seats', seatRoutes);
 router.use('/bookings', bookingRoutes);
 router.use('/stats', statsRoutes);
 

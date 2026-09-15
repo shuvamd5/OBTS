@@ -117,7 +117,7 @@ export default function AddSchedulePage() {
               <option value="">Select bus...</option>
               {buses.map((b) => (
                 <option key={b._id} value={b._id}>
-                  {b.bcd} {b.bno} — {b.bname}
+                  {b.plateNumber} — {b.bname}
                 </option>
               ))}
             </select>

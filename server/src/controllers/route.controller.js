@@ -1,7 +1,8 @@
 import mongoose from 'mongoose';
 import Route from '../models/Route.js';
 import Location from '../models/Location.js';
-import Addroute from '../models/Addroute.js';
+import ScheduleRoute from '../models/ScheduleRoute.js';
+import Seat from '../models/Seat.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 async function ensureLocation(name) {
@@ -15,17 +16,35 @@ function sortedCheckpoints(route) {
   route.checkpoints.sort((a, b) => a.price - b.price);
 }
 
+// Checkpoint edits re-sort the checkpoints and renumber their index-based
+// segment ids (cpid). Seat/Ticket documents store those ids, so mutations are
+// blocked while any booked tickets exist on the route to avoid silent
+// corruption of segment references.
+const assertNoRouteTickets = async (route) => {
+  const linked = await ScheduleRoute.findOne({ rid: route._id, deletedAt: null }).select('_id').lean();
+  if (!linked) return;
+  const hasSeats = await Seat.exists({ arid: linked._id });
+  if (hasSeats) {
+    throw new AppError(
+      400,
+      'Cannot modify checkpoints while seats are booked on this route - use a new route instead'
+    );
+  }
+};
+
 export const listRoutes = asyncHandler(async (_req, res) => {
   const routes = await Route.find({}).sort({ sp: 1 }).lean();
   const sorted = routes.map((r) => ({
     ...r,
+    rstatus: r.rstatus ?? 'pending',
+    rsapby: r.rsapby ?? 'none',
     checkpoints: [...r.checkpoints].sort((a, b) => a.price - b.price),
   }));
   res.json({ routes: sorted });
 });
 
 export const createRoute = asyncHandler(async (req, res) => {
-  const { sp, fp } = req.validated.body;
+  const { sp, fp, distance, duration } = req.validated.body;
 
   await ensureLocation(sp);
   await ensureLocation(fp);
@@ -35,7 +54,7 @@ export const createRoute = asyncHandler(async (req, res) => {
     throw new AppError(409, 'Route already exists');
   }
 
-  const route = await Route.create({ sp, fp });
+  const route = await Route.create({ sp, fp, distance, duration });
   res.status(201).json({ route });
 });
 
@@ -46,7 +65,7 @@ export const updateRoute = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Route not found');
   }
 
-  const { sp, fp } = req.validated.body;
+  const { sp, fp, distance, duration } = req.validated.body;
 
   if (sp !== undefined) await ensureLocation(sp);
   if (fp !== undefined) await ensureLocation(fp);
@@ -61,6 +80,8 @@ export const updateRoute = asyncHandler(async (req, res) => {
   const changes = {};
   if (sp !== undefined && sp !== route.sp) changes.sp = sp;
   if (fp !== undefined && fp !== route.fp) changes.fp = fp;
+  if (distance !== undefined && distance !== route.distance) changes.distance = distance;
+  if (duration !== undefined && duration !== route.duration) changes.duration = duration;
 
   if (Object.keys(changes).length === 0) {
     return res.json({ route, message: 'No change' });
@@ -76,8 +97,36 @@ export const updateRoute = asyncHandler(async (req, res) => {
   }
 
   Object.assign(route, changes);
+  if (route.rstatus === 'active') {
+    route.rstatus = 'pending';
+    route.rsapby = 'none';
+  }
   await route.save();
   res.json({ route });
+});
+
+export const updateRouteStatus = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const { rstatus } = req.validated.body;
+
+  if (!mongoose.isValidObjectId(id)) {
+    throw new AppError(400, 'Invalid route id');
+  }
+
+  const route = await Route.findById(id);
+  if (!route) {
+    throw new AppError(404, 'Route not found');
+  }
+
+  if ((route.rstatus ?? 'pending') === rstatus) {
+    return res.json({ route: route.toObject(), message: 'No change' });
+  }
+
+  route.rstatus = rstatus;
+  route.rsapby = req.user.uname;
+  await route.save();
+
+  res.json({ route, message: 'Status updated' });
 });
 
 export const addCheckpoint = asyncHandler(async (req, res) => {
@@ -99,6 +148,8 @@ export const addCheckpoint = asyncHandler(async (req, res) => {
   if (route.checkpoints.some((c) => c.route === stop)) {
     throw new AppError(409, 'Checkpoint already exists on this route');
   }
+
+  await assertNoRouteTickets(route);
 
   route.checkpoints.push({ route: stop, price });
   sortedCheckpoints(route);
@@ -154,6 +205,8 @@ export const updateCheckpoint = asyncHandler(async (req, res) => {
   if (changes.route !== undefined) checkpoint.route = changes.route;
   if (changes.price !== undefined) checkpoint.price = changes.price;
 
+  await assertNoRouteTickets(route);
+
   sortedCheckpoints(route);
   await route.save();
   res.json({ route });
@@ -171,7 +224,7 @@ export const deleteRoute = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Route not found');
   }
 
-  const linked = await Addroute.findOne({ rid: id }).select('_id').lean();
+  const linked = await ScheduleRoute.findOne({ rid: id, deletedAt: null }).select('_id').lean();
   if (linked) {
     throw new AppError(
       400,
@@ -199,6 +252,8 @@ export const deleteCheckpoint = asyncHandler(async (req, res) => {
   if (!checkpoint) {
     throw new AppError(404, 'Checkpoint not found');
   }
+
+  await assertNoRouteTickets(route);
 
   route.checkpoints.pull(cpid);
   await route.save();

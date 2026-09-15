@@ -3,16 +3,27 @@ import { requireAuth, requireRole } from '../middleware/auth.js';
 import { validate } from '../middleware/validate.js';
 import {
   busCreateSchema,
+  busEditSchema,
   busStatusSchema,
+  busOwnerSchema,
   busIdParamSchema,
 } from '../schemas/bus.schema.js';
-import { listBuses, createBus, updateStatus, deleteBus } from '../controllers/bus.controller.js';
+import {
+  listBuses,
+  getBus,
+  createBus,
+  updateBus,
+  updateStatus,
+  reassignOperator,
+  deleteBus,
+} from '../controllers/bus.controller.js';
 
 const router = Router();
 
 router.use(requireAuth);
 
 router.get('/', listBuses);
+router.get('/:id', validate(busIdParamSchema, 'params'), getBus);
 router.post('/', validate(busCreateSchema), requireRole('admin', 'operator'), createBus);
 router.patch(
   '/:id/status',
@@ -20,6 +31,20 @@ router.patch(
   validate(busStatusSchema),
   requireRole('admin'),
   updateStatus
+);
+router.patch(
+  '/:id/operator',
+  validate(busIdParamSchema, 'params'),
+  validate(busOwnerSchema),
+  requireRole('admin'),
+  reassignOperator
+);
+router.patch(
+  '/:id',
+  validate(busIdParamSchema, 'params'),
+  validate(busEditSchema),
+  requireRole('admin', 'operator'),
+  updateBus
 );
 router.delete('/:id', validate(busIdParamSchema, 'params'), requireRole('admin', 'operator'), deleteBus);
 

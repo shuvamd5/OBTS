@@ -9,13 +9,15 @@ import { connectDB, disconnectDB } from '../src/config/db.js';
 import User from '../src/models/User.js';
 import Route from '../src/models/Route.js';
 import Bus from '../src/models/Bus.js';
+import BusType from '../src/models/BusType.js';
 import BusSchedule from '../src/models/BusSchedule.js';
-import Addroute from '../src/models/Addroute.js';
+import ScheduleRoute from '../src/models/ScheduleRoute.js';
 import Sales from '../src/models/Sales.js';
 import Location from '../src/models/Location.js';
 
 const uniq = Date.now().toString(36);
-const cleanup = { userIds: [], routeIds: [], busIds: [], schedIds: [], priceIds: [] };
+const platePick = (offset) => String((Date.now() % 90000) + 10000 + offset);
+const cleanup = { userIds: [], routeIds: [], busIds: [], busTypeIds: [], schedIds: [], priceIds: [] };
 let mobSeq = 0;
 const mobile = () => `982${String((Date.now() + mobSeq++) % 10000000).padStart(7, '0')}`;
 const day = (n) => {
@@ -26,6 +28,12 @@ const day = (n) => {
   ).padStart(2, '0')}`;
 };
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
+
+const ensureType = async () => {
+  const bt = await BusType.create({ name: `T37_${uniq}`, seatCount: 37, seatStyle: 'luxury' });
+  cleanup.busTypeIds.push(String(bt._id));
+  return String(bt._id);
+};
 
 let adminToken, userToken, mgrToken, adminId;
 
@@ -86,11 +94,13 @@ try {
   body = await login(usr.uemail, 'Test@1234');
   userToken = body.accessToken;
 
+  const busTypeId = await ensureType();
+
   // --- create a route with checkpoints ---
   let r = await request(app)
     .post('/api/routes')
     .set(auth(adminToken))
-    .send({ sp, fp });
+    .send({ sp, fp, distance: 150, duration: '4h' });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const routeId = r.body.route._id;
   // adjust fp so checkpoint towns differ from sp/fp
@@ -127,7 +137,7 @@ try {
   let route2 = await request(app)
     .post('/api/routes')
     .set(auth(adminToken))
-    .send({ sp, fp: t3 });
+    .send({ sp, fp: t3, distance: 150, duration: '4h' });
   assert.equal(route2.status, 201, JSON.stringify(route2.body));
   const route2Id = route2.body.route._id;
   cleanup.routeIds.push(route2Id);
@@ -135,7 +145,7 @@ try {
   r = await request(app)
     .post('/api/buses')
     .set(auth(adminToken))
-    .send({ bcd0: 'BA', bcd1: '1', bcd2: 'KA', bno: '9001', bname: 'UI', btype: 'Deluxe', nseat: 39, stype: 'foldable' });
+    .send({ plateNumber: `BA 1 KA ${platePick(0)}`, busTypeId, bname: 'UI' });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const busId = r.body.bus._id;
   cleanup.busIds.push(busId);
@@ -153,14 +163,13 @@ try {
     .set(auth(adminToken))
     .send({ bsid: schedId, rid: route2Id, price: 500 });
   assert.equal(r.status, 201, JSON.stringify(r.body));
-  const priceId = r.body.addroute._id;
+  const priceId = r.body.scheduleRoute._id;
   cleanup.priceIds.push(priceId);
 
   r = await request(app).delete(`/api/routes/${route2Id}`).set(auth(adminToken));
   assert.equal(r.status, 400, JSON.stringify(r.body));
   assert.match(r.body.message, /assigned to one or more schedules/i);
   ok('route delete blocked (400) when referenced by a schedule');
-  cleanup.routeIds = cleanup.routeIds.filter((x) => x !== route2Id);
   assert.ok(await Route.findById(route2Id), 'route still exists');
 
   // --- 4. schedule edit (admin) — change time only ---
@@ -214,7 +223,7 @@ try {
   r = await request(app)
     .post('/api/buses')
     .set(auth(mgrToken))
-    .send({ bcd0: 'BA', bcd1: '2', bcd2: 'KA', bno: '9002', bname: 'UIM', btype: 'A/C', nseat: 37, stype: 'semi-foldable' });
+    .send({ plateNumber: `BA 2 KA ${platePick(1)}`, busTypeId, bname: 'UIM' });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const mgrBus = r.body.bus._id;
   cleanup.busIds.push(mgrBus);
@@ -239,9 +248,10 @@ try {
 } finally {
   await User.deleteMany({ _id: { $in: cleanup.userIds } });
   await Sales.deleteMany({ bsid: { $in: cleanup.schedIds } });
-  await Addroute.deleteMany({ _id: { $in: cleanup.priceIds } });
+  await ScheduleRoute.deleteMany({ _id: { $in: cleanup.priceIds } });
   await BusSchedule.deleteMany({ _id: { $in: cleanup.schedIds } });
   await Bus.deleteMany({ _id: { $in: cleanup.busIds } });
+  await BusType.deleteMany({ _id: { $in: cleanup.busTypeIds } });
   await Route.deleteMany({ _id: { $in: cleanup.routeIds } });
   await disconnectDB();
   console.log('cleaned up');

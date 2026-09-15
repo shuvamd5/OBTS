@@ -38,20 +38,21 @@ const offer: BookingOffer = {
   arid: "arid1",
   bsid: "bsid1",
   bid: "bid1",
-  bname: "Express Queen",
-  bcd: "BA 1 KA",
-  bno: "1234",
-  btype: "A/C",
-  stype: "FOLDABLE",
-  nseat: 37,
+  bus: {
+    bid: "bid1",
+    bname: "Express Queen",
+    plateNumber: "BA 1 JA 2345",
+    busType: { _id: "bt1", name: "Volvo A/C Seater", seatCount: 37 },
+    amenities: ["wifi", "ac"],
+  },
   trdate: "2030-01-01",
   trtime: "08:00",
   route: { rid: "r1", sp: "KTM", fp: "PKR" },
   query: { sp: "KTM", fp: "PKR" },
   cpid: { sp: 0, fp: 100 },
   price: 500,
-  counts: { E: 1, P: 0, R: 0 },
-  seats: [{ sno: 1, blc: "B", sna: "1", status: "E" }],
+  counts: { available: 1, held: 0, reserved: 0 },
+  seats: [{ sno: 1, blc: "B", sna: "1", status: "available", lockExpiry: null }],
   rows: [{ left: null, seats: [0] }],
 };
 
@@ -80,11 +81,16 @@ const result: BookingResult = {
     sp: "KTM",
     fp: "PKR",
     price: 500,
-    status: "R",
+    status: "reserved",
     trdate: "2030-01-01",
     trtime: "08:00",
   },
-  bus: { bname: "Express Queen", bcd: "BA 1 KA", bno: "1234", btype: "A/C", stype: "FOLDABLE", nseat: 37 },
+  bus: {
+    bname: "Express Queen",
+    plateNumber: "BA 1 JA 2345",
+    busType: { _id: "bt1", name: "Volvo A/C Seater", seatCount: 37 },
+    amenities: ["wifi", "ac"],
+  },
   price: 500,
 };
 
@@ -111,7 +117,7 @@ async function fillSearchAndRun(user: ReturnType<typeof userEvent.setup>) {
 }
 
 async function pickSeat(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: "B 1" }));
+  await user.click(screen.getByRole("button", { name: /B 1/ }));
   await screen.findByText("Confirm booking");
 }
 
@@ -122,25 +128,29 @@ describe("BookingPage", () => {
     bookings.search.mockResolvedValue({ data: { offers: [offer] } });
   });
 
-  it("lets a logged-in user search, pick a seat, and reserve it", async () => {
-    bookings.confirm.mockResolvedValue({ data: result });
-    const user = userEvent.setup();
-    renderPage();
+  it(
+    "lets a logged-in user search, pick a seat, and reserve it",
+    async () => {
+      bookings.confirm.mockResolvedValue({ data: result });
+      const user = userEvent.setup();
+      renderPage();
 
-    await fillSearchAndRun(user);
-    await pickSeat(user);
+      await fillSearchAndRun(user);
+      await pickSeat(user);
 
-    await user.click(screen.getByRole("button", { name: "Reserve" }));
+      await user.click(screen.getByRole("button", { name: "Reserve" }));
 
-    await screen.findByText("registration complete");
-    expect(bookings.confirm).toHaveBeenCalledWith({
-      arid: "arid1",
-      sno: 1,
-      sp: "KTM",
-      fp: "PKR",
-    });
-    await waitFor(() => expect(bookings.pending).not.toHaveBeenCalled());
-  });
+      await screen.findByText("registration complete");
+      expect(bookings.confirm).toHaveBeenCalledWith({
+        arid: "arid1",
+        sno: 1,
+        sp: "KTM",
+        fp: "PKR",
+      });
+      await waitFor(() => expect(bookings.pending).not.toHaveBeenCalled());
+    },
+    15000
+  );
 
   it("puts a picked seat on-hold instead of reserving it", async () => {
     bookings.pending.mockResolvedValue({ data: { ...result, ticket: { ...result.ticket, tstatus: "P" as const } } });

@@ -13,6 +13,10 @@ const routeSchema = new mongoose.Schema(
     sp: { type: String, required: true },
     fp: { type: String, required: true },
     checkpoints: [checkpointSchema],
+    rstatus: { type: String, enum: ['pending', 'active', 'inactive'], default: 'pending' },
+    rsapby: { type: String, default: 'none' },
+    distance: { type: Number, required: true, min: 0 },
+    duration: { type: String, required: true, trim: true },
   },
   { timestamps: true }
 );

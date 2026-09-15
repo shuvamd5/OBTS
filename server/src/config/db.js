@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
 import { config } from './env.js';
+import { backfillIndexes } from '../utils/backfillIndexes.js';
+import { backfillRouteFields } from '../utils/backfillRouteFields.js';
+import { backfillScheduleStatuses } from '../utils/backfillScheduleStatuses.js';
 
 export async function connectDB() {
   mongoose.connection.on('connected', () => {
@@ -8,7 +11,12 @@ export async function connectDB() {
   mongoose.connection.on('error', (err) => {
     console.error('[db] MongoDB error:', err.message);
   });
-  await mongoose.connect(config.mongoUri);
+  // autoIndex is off here so the legacy full-unique indexes can be replaced by
+  // the partial unique indexes (see backfillIndexes) before schema-index build.
+  await mongoose.connect(config.mongoUri, { autoIndex: false });
+  await backfillIndexes();
+  await backfillRouteFields();
+  await backfillScheduleStatuses();
   return mongoose.connection;
 }
 

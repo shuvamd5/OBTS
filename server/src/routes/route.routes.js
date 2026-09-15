@@ -8,11 +8,13 @@ import {
   checkpointEditSchema,
   routeIdParamSchema,
   checkpointRouteIdParamSchema,
+  routeStatusSchema,
 } from '../schemas/route.schema.js';
 import {
   listRoutes,
   createRoute,
   updateRoute,
+  updateRouteStatus,
   addCheckpoint,
   updateCheckpoint,
   deleteRoute,
@@ -31,6 +33,13 @@ router.patch(
   validate(routeEditSchema),
   requireRole('admin', 'operator'),
   updateRoute
+);
+router.patch(
+  '/:id/status',
+  validate(routeIdParamSchema, 'params'),
+  validate(routeStatusSchema),
+  requireRole('admin'),
+  updateRouteStatus
 );
 router.post(
   '/:id/checkpoints',

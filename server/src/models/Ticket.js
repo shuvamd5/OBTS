@@ -4,7 +4,7 @@ export const TICKET_STATUSES = ['E', 'P', 'R'];
 
 const ticketSchema = new mongoose.Schema(
   {
-    arid: { type: mongoose.Schema.Types.ObjectId, ref: 'Addroute', required: true },
+    arid: { type: mongoose.Schema.Types.ObjectId, ref: 'ScheduleRoute', required: true },
     ssid: { type: mongoose.Schema.Types.ObjectId, ref: 'Seat', required: true },
     trdate: { type: Date, required: true },
     trtime: { type: String, required: true },

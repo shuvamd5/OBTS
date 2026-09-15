@@ -27,7 +27,7 @@ export default function UserView({
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <p className="font-mono text-lg font-bold tracking-wide text-slate-900">
-                      {s.bus?.bcd} {s.bus?.bno}
+                      {s.bus?.plateNumber}
                     </p>
                     <p className="text-sm font-medium text-slate-600">{s.bus?.bname}</p>
                   </div>
@@ -38,15 +38,17 @@ export default function UserView({
                     {fmtDate(s.trdate)} at {s.trtime}
                   </p>
                   <p>
-                    {s.bus?.btype} · {s.bus?.nseat} seats
+                    {s.bus?.busType ? `${s.bus.busType.name} · ${s.bus.busType.seatCount} seats` : ""}
                   </p>
-                  {s.price ? (
+                  {s.price?.rid ? (
                     <p className="text-slate-800">
                       {s.price.rid.sp} → {s.price.rid.fp}:{" "}
                       <span className="font-semibold text-slate-900">Rs. {s.price.price}</span>
                     </p>
                   ) : (
-                    <p className="text-xs text-slate-400">price not set yet</p>
+                    <p className="text-xs text-slate-400">
+                      {s.price ? "Fare set but route is unavailable." : "price not set yet"}
+                    </p>
                   )}
                 </div>
               </Card>

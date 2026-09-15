@@ -1,11 +1,10 @@
 import { useMemo, useState } from "react";
 import { pricesApi } from "../../api/prices";
 import { serializeError } from "../../api/client";
-import type { PriceStatus, Route, Schedule } from "../../types";
+import type { Route, Schedule } from "../../types";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
 import Select from "../ui/Select";
-import StatusPill from "./StatusPill";
 
 const highestCheckpointFare = (route?: Route) =>
   (route?.checkpoints ?? []).reduce((max, c) => Math.max(max, c.price), 0);
@@ -14,19 +13,26 @@ const compactClass = "px-2 py-1.5";
 
 export default function PriceSection({
   s,
-  isAdminRole,
   routes,
   editing,
   onPriceChanged,
+  onAssigned,
+  editRid,
+  onEditRidChange,
+  editPrice,
+  onEditPriceChange,
 }: {
   s: Schedule;
-  isAdminRole: boolean;
   routes: Route[];
   editing: boolean;
   onPriceChanged: () => void;
+  onAssigned?: () => void;
+  editRid?: string;
+  onEditRidChange?: (v: string) => void;
+  editPrice?: string;
+  onEditPriceChange?: (v: string) => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
   const [error, setError] = useState("");
   const [msg, setMsg] = useState("");
 
@@ -34,35 +40,23 @@ export default function PriceSection({
   const [newRid, setNewRid] = useState("");
   const [newPrice, setNewPrice] = useState("");
 
-  const [editingPrice, setEditingPrice] = useState(false);
-  const [editRid, setEditRid] = useState("");
-  const [editPrice, setEditPrice] = useState("");
-
   const selectedEditRoute = useMemo(
-    () => routes.find((r) => r._id === (editingPrice ? editRid : s.price?.rid._id)),
-    [routes, editingPrice, editRid, s.price]
+    () => routes.find((r) => r._id === (editRid || (s.price?.rid?._id ?? ""))),
+    [routes, editRid, s.price]
   );
   const minFare = highestCheckpointFare(selectedEditRoute);
 
-  async function changePriceStatus(arstatus: PriceStatus) {
-    if (!s.price || arstatus === s.price.arstatus) return;
-    setBusy(true);
-    setError("");
-    try {
-      await pricesApi.updateStatus(s.price._id, arstatus);
-      setMsg("Price status updated.");
-      onPriceChanged();
-    } catch (err) {
-      setError(serializeError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const selectedNewRoute = useMemo(() => routes.find((r) => r._id === newRid), [routes, newRid]);
+  const newMinFare = highestCheckpointFare(selectedNewRoute);
 
   async function assignFare(e: React.FormEvent) {
     e.preventDefault();
     if (!s || !newRid || newPrice === "") {
       setError("Select a route and enter a fare.");
+      return;
+    }
+    if (Number(newPrice) <= newMinFare) {
+      setError(`Fare must exceed the highest checkpoint fare (Rs. ${newMinFare}).`);
       return;
     }
     setBusy(true);
@@ -73,47 +67,15 @@ export default function PriceSection({
       setAssigning(false);
       setNewRid("");
       setNewPrice("");
-      setMsg("Fare assigned — needs admin approval before passengers can book it.");
+      if (onAssigned) {
+        onAssigned();
+      } else {
+        setMsg("Fare assigned — needs admin approval before passengers can book it.");
+      }
       onPriceChanged();
     } catch (err) {
       setError(serializeError(err));
     } finally {
-      setBusy(false);
-    }
-  }
-
-  async function savePriceEdits() {
-    if (!s.price) return;
-    setBusy(true);
-    setError("");
-    setMsg("");
-    try {
-      if (editRid && editRid !== s.price.rid._id) {
-        await pricesApi.updateRoute(s.price._id, editRid);
-      }
-      if (editPrice !== "" && Number(editPrice) !== s.price.price) {
-        await pricesApi.updatePrice(s.price._id, Number(editPrice));
-      }
-      setEditingPrice(false);
-      setMsg("Fare updated — it goes back to unchecked for re-approval.");
-      onPriceChanged();
-    } catch (err) {
-      setError(serializeError(err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function handleDeletePrice() {
-    if (!s.price) return;
-    setBusy(true);
-    setError("");
-    try {
-      await pricesApi.remove(s.price._id);
-      setConfirm(false);
-      onPriceChanged();
-    } catch (err) {
-      setError(serializeError(err));
       setBusy(false);
     }
   }
@@ -160,7 +122,7 @@ export default function PriceSection({
                 onChange={(e) => setNewPrice(e.target.value)}
                 className={`${compactClass} w-28`}
               />
-              <Button type="submit" size="sm" disabled={busy}>
+              <Button type="submit" size="sm" disabled={busy || routes.length === 0}>
                 {busy ? "Assigning..." : "Assign"}
               </Button>
             </div>
@@ -176,100 +138,52 @@ export default function PriceSection({
   }
 
   return (
-    <div className="mt-3 space-y-2 border-t border-slate-100 pt-3 text-sm text-slate-600">
+    <div className="mt-1 mb-2 space-y-2 border-t border-slate-100 pt-1 text-sm text-slate-600">
       <div className="flex flex-wrap items-center gap-2">
         <p className="text-slate-800">
-          {s.price.rid.sp} → {s.price.rid.fp}
-          {" · "}
+          <span className="text-xs text-slate-500">Fare </span>
           <span className="font-semibold text-slate-900">Rs. {s.price.price}</span>
         </p>
-        <StatusPill status={s.price.arstatus} />
       </div>
 
-      {!editing && <p className="text-xs text-slate-400">Click the pen to manage the fare.</p>}
+      {/* {!editing && <p className="text-xs text-slate-400">Click the pen to manage the fare.</p>} */}
 
-      {editing && isAdminRole && (
-        <div className="flex items-center gap-2">
-          <Select
-            value={s.price.arstatus}
-            disabled={busy}
-            onChange={(e) => void changePriceStatus(e.target.value as PriceStatus)}
-            className={compactClass}
-          >
-            <option value="unchecked">unchecked</option>
-            <option value="not ok">not ok</option>
-            <option value="ok">ok</option>
-          </Select>
-          <span className="text-xs text-slate-400">approve fare for booking</span>
-        </div>
-      )}
-
-      {editing && (
-        <div className="flex flex-wrap items-center gap-2">
-          {!editingPrice ? (
-            <>
-              <Button
-                variant="secondary"
-                size="xs"
-                onClick={() => {
-                  setEditRid(s.price!.rid._id);
-                  setEditPrice(String(s.price!.price));
-                  setEditingPrice(true);
-                }}
-              >
-                Edit route / fare
-              </Button>
-              {!confirm ? (
-                <Button variant="danger" onClick={() => setConfirm(true)}>
-                  Delete fare
-                </Button>
-              ) : (
-                <>
-                  <span className="text-xs text-red-600">Delete this fare?</span>
-                  <button
-                    type="button"
-                    onClick={() => void handleDeletePrice()}
-                    disabled={busy}
-                    className="rounded-btn bg-red-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-50"
-                  >
-                    Yes
-                  </button>
-                  <Button variant="secondary" size="xs" onClick={() => setConfirm(false)}>
-                    No
-                  </Button>
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <Select value={editRid} onChange={(e) => setEditRid(e.target.value)} className={compactClass}>
+      {editing && onEditRidChange && onEditPriceChange && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="min-w-40">
+              <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Route
+              </label>
+              <Select value={editRid} onChange={(e) => onEditRidChange(e.target.value)} className={compactClass}>
                 {routes.map((r) => (
                   <option key={r._id} value={r._id}>
                     {r.sp} → {r.fp}
                   </option>
                 ))}
               </Select>
+            </div>
+            <div className="min-w-32">
+              <label className="block px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                New fare (Rs.)
+              </label>
               <Input
                 type="number"
                 min="0"
                 step="1"
+                placeholder={`${s.price.price}`}
                 value={editPrice}
-                onChange={(e) => setEditPrice(e.target.value)}
+                onChange={(e) => onEditPriceChange(e.target.value)}
                 className={`${compactClass} w-28`}
               />
-              <Button size="sm" onClick={() => void savePriceEdits()} disabled={busy}>
-                Save
-              </Button>
-              <Button variant="secondary" size="xs" onClick={() => setEditingPrice(false)}>
-                Cancel
-              </Button>
-            </>
-          )}
-          {editingPrice && minFare > 0 && editPrice !== "" && Number(editPrice) <= minFare && (
-            <span className="text-xs font-medium text-red-600">
+            </div>
+          </div>
+          {minFare > 0 && editPrice !== "" && Number(editPrice) <= minFare && (
+            <p className="text-xs font-medium text-red-600">
               must exceed highest checkpoint fare (Rs. {minFare})
-            </span>
+            </p>
           )}
+          <p className="text-xs text-slate-400">Leave the fare empty to keep it unchanged.</p>
         </div>
       )}
 

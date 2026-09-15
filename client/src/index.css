@@ -60,6 +60,14 @@
     @apply rounded-btn border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/20;
   }
 
+  .icon-btn {
+    @apply rounded-btn p-1.5 text-slate-400 transition-colors hover:bg-slate-100 hover:text-brand-600;
+  }
+
+  .icon-btn-danger {
+    @apply rounded-btn p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600;
+  }
+
   .stat-hero {
     @apply text-2xl font-bold tracking-tight text-slate-900;
   }

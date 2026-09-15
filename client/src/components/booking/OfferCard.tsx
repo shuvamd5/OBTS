@@ -16,9 +16,9 @@ export default function OfferCard({
     <Card pad="5">
       <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-lg font-bold text-slate-900">{offer.bname}</div>
+          <div className="text-lg font-bold text-slate-900">{offer.bus.bname}</div>
           <div className="text-sm text-slate-500">
-            {offer.bcd} {offer.bno} · {offer.btype} · {offer.stype} · {offer.nseat} seats
+            {offer.bus.plateNumber} · {offer.bus.busType?.name ?? "—"} · {offer.bus.busType?.seatCount ?? "—"} seats
           </div>
           <div className="mt-1 flex items-center gap-1 text-sm text-slate-500">
             <MapPinIcon className="h-3.5 w-3.5" />
@@ -30,8 +30,7 @@ export default function OfferCard({
         <div className="text-right">
           <div className="stat-hero">Rs {offer.price}</div>
           <div className="text-xs text-slate-400">
-            seats {offer.nseat} · Empty {offer.counts.E} · Pending {offer.counts.P} · Reserved{" "}
-            {offer.counts.R}
+            seats {offer.bus.busType?.seatCount ?? "—"} · Available {offer.counts.available} · Held{" "} {offer.counts.held} · Reserved {offer.counts.reserved}
           </div>
         </div>
       </div>

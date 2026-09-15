@@ -1,8 +1,6 @@
 import BusSchedule from '../models/BusSchedule.js';
-import Addroute from '../models/Addroute.js';
+import ScheduleRoute from '../models/ScheduleRoute.js';
 import Sales from '../models/Sales.js';
-import Seat from '../models/Seat.js';
-import Ticket from '../models/Ticket.js';
 import Bus from '../models/Bus.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
@@ -13,30 +11,46 @@ export const listSchedules = asyncHandler(async (req, res) => {
   const user = req.user;
   let filter;
   if (user.ustatus === 'admin') {
-    filter = { bsstatus: { $ne: 'Expired' } };
+    filter = { bsstatus: { $ne: 'expired' }, deletedAt: null };
   } else if (user.ustatus === 'operator') {
-    const own = await Bus.find({ uid: user._id }).select('_id').lean();
-    filter = { bsstatus: { $ne: 'Expired' }, bid: { $in: own.map((b) => b._id) } };
+    const own = await Bus.find({ uid: user._id, deletedAt: null }).select('_id').lean();
+    filter = { bsstatus: { $ne: 'expired' }, deletedAt: null, bid: { $in: own.map((b) => b._id) } };
   } else {
-    filter = { bsstatus: 'going' };
+    filter = { bsstatus: 'approved', deletedAt: null };
   }
   const schedules = await BusSchedule.find(filter)
     .sort({ trdate: 1 })
-    .populate('bid', 'bcd bno bname btype nseat bstatus bsapby')
+    .populate({
+      path: 'bid',
+      select: 'plateNumber bname amenities bstatus bsapby busTypeId',
+      populate: { path: 'busTypeId', select: 'name seatCount' },
+    })
     .lean();
 
-  const ids = schedules.map((s) => s._id);
-  const prices = await Addroute.find({ bsid: { $in: ids } })
+  // drop orphaned schedules whose bus no longer exists, and schedules whose bus
+  // has been soft-deleted
+  const liveSchedules = schedules.filter((s) => s.bid !== null && !s.bid.deletedAt);
+  // customers only see schedules whose bus is active
+  const visibleSchedules =
+    user.ustatus === 'admin' || user.ustatus === 'operator'
+      ? liveSchedules
+      : liveSchedules.filter((s) => s.bid.bstatus === 'active');
+
+  const ids = visibleSchedules.map((s) => s._id);
+  const prices = await ScheduleRoute.find({ bsid: { $in: ids }, deletedAt: null })
     .populate('rid', 'sp fp')
     .lean();
   const priceMap = new Map(prices.map((p) => [String(p.bsid), p]));
 
-  const out = schedules.map(({ bid, ...rest }) => ({
-    ...rest,
-    bid: bid._id,
-    bus: bid,
-    price: priceMap.get(String(rest._id)) ?? null,
-  }));
+  const out = visibleSchedules.map(({ bid, ...rest }) => {
+    const { busTypeId, ...busRest } = bid;
+    return {
+      ...rest,
+      bid: bid._id,
+      bus: { ...busRest, busType: busTypeId ?? null },
+      price: priceMap.get(String(rest._id)) ?? null,
+    };
+  });
 
   res.json({ schedules: out });
 });
@@ -44,7 +58,7 @@ export const listSchedules = asyncHandler(async (req, res) => {
 export const createSchedule = asyncHandler(async (req, res) => {
   const { bid, trdate, trtime } = req.validated.body;
 
-  const bus = await Bus.findById(bid);
+  const bus = await Bus.findOne({ _id: bid, deletedAt: null });
   if (!bus) {
     throw new AppError(404, 'Bus not found');
   }
@@ -63,7 +77,7 @@ export const createSchedule = asyncHandler(async (req, res) => {
     throw new AppError(400, 'There is less than 4 days difference in days');
   }
 
-  const existing = await BusSchedule.find({ bid }).select('trdate').lean();
+  const existing = await BusSchedule.find({ bid, deletedAt: null }).select('trdate').lean();
   for (const e of existing) {
     const e0 = startOfDay(e.trdate);
     if (e0.getTime() === t0.getTime()) {
@@ -78,7 +92,7 @@ export const createSchedule = asyncHandler(async (req, res) => {
     bid,
     trdate: t0,
     trtime,
-    bsstatus: 'not approved',
+    bsstatus: 'pending',
     bssapby: 'none',
   });
 
@@ -89,7 +103,7 @@ export const updateStatus = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
   const { bsstatus } = req.validated.body;
 
-  const schedule = await BusSchedule.findById(id);
+  const schedule = await BusSchedule.findOne({ _id: id, deletedAt: null });
   if (!schedule) {
     throw new AppError(404, 'Schedule not found');
   }
@@ -102,19 +116,27 @@ export const updateStatus = asyncHandler(async (req, res) => {
   schedule.bssapby = req.user.uname;
   await schedule.save();
 
-  if (bsstatus !== 'going') {
-    await Addroute.updateMany(
-      { bsid: schedule._id, arstatus: { $ne: 'Expired' } },
-      { $set: { arstatus: 'unchecked' } }
+  if (bsstatus !== 'approved') {
+    await ScheduleRoute.updateMany(
+      { bsid: schedule._id, arstatus: { $ne: 'expired' }, deletedAt: null },
+      { $set: { arstatus: 'pending' } }
     );
   } else {
+    // The schedule status is the single approval switch: approving it also
+    // approves the fare (price status is derived from the schedule status).
+    await ScheduleRoute.updateMany(
+      { bsid: schedule._id, arstatus: { $ne: 'expired' }, deletedAt: null },
+      { $set: { arstatus: 'approved' } }
+    );
     await Sales.findOneAndUpdate(
       { bsid: schedule._id },
       {
-        $setOnInsert: {
-          bid: schedule.bid,
+        $set: {
           trdate: schedule.trdate,
           trtime: schedule.trtime,
+        },
+        $setOnInsert: {
+          bid: schedule.bid,
           sales: 0,
         },
       },
@@ -128,26 +150,24 @@ export const updateStatus = asyncHandler(async (req, res) => {
 export const deleteSchedule = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
 
-  const schedule = await BusSchedule.findById(id);
+  const schedule = await BusSchedule.findOne({ _id: id, deletedAt: null });
   if (!schedule) {
     throw new AppError(404, 'Schedule not found');
   }
 
   if (req.user.ustatus === 'operator') {
-    const busOwner = await Bus.findById(schedule.bid).select('uid').lean();
+    const busOwner = await Bus.findOne({ _id: schedule.bid, deletedAt: null })
+      .select('uid')
+      .lean();
     if (!busOwner || String(busOwner.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');
     }
   }
 
-  const price = await Addroute.findOne({ bsid: schedule._id }).select('_id').lean();
-  if (price) {
-    await Seat.deleteMany({ arid: price._id });
-    await Ticket.deleteMany({ arid: price._id });
-  }
-  await Addroute.deleteMany({ bsid: schedule._id });
-  await Sales.deleteMany({ bsid: schedule._id });
-  await BusSchedule.findByIdAndDelete(id);
+  // Soft delete: dependents (ScheduleRoute / Seats / Tickets / Sales) are kept,
+  // excluded from every query via deletedAt: null filters.
+  schedule.deletedAt = new Date();
+  await schedule.save();
 
   res.json({ message: 'Schedule deleted', id });
 });
@@ -155,13 +175,15 @@ export const deleteSchedule = asyncHandler(async (req, res) => {
 export const updateSchedule = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
 
-  const schedule = await BusSchedule.findById(id);
+  const schedule = await BusSchedule.findOne({ _id: id, deletedAt: null });
   if (!schedule) {
     throw new AppError(404, 'Schedule not found');
   }
 
   if (req.user.ustatus === 'operator') {
-    const busOwner = await Bus.findById(schedule.bid).select('uid').lean();
+    const busOwner = await Bus.findOne({ _id: schedule.bid, deletedAt: null })
+      .select('uid')
+      .lean();
     if (!busOwner || String(busOwner.uid) !== String(req.user._id)) {
       throw new AppError(403, 'Not your bus');
     }
@@ -184,7 +206,11 @@ export const updateSchedule = asyncHandler(async (req, res) => {
         throw new AppError(400, 'There is less than 4 days difference in days');
       }
 
-      const existing = await BusSchedule.find({ bid: schedule.bid, _id: { $ne: schedule._id } })
+      const existing = await BusSchedule.find({
+        bid: schedule.bid,
+        _id: { $ne: schedule._id },
+        deletedAt: null,
+      })
         .select('trdate')
         .lean();
       for (const e of existing) {
@@ -210,7 +236,14 @@ export const updateSchedule = asyncHandler(async (req, res) => {
   }
 
   Object.assign(schedule, changes);
+  schedule.bsstatus = 'pending';
+  schedule.bssapby = 'none';
   await schedule.save();
+
+  await ScheduleRoute.updateMany(
+    { bsid: schedule._id, arstatus: { $ne: 'expired' }, deletedAt: null },
+    { $set: { arstatus: 'pending' } }
+  );
 
   res.json({ schedule, message: 'Schedule updated' });
 });

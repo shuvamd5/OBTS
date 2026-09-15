@@ -32,7 +32,12 @@ export default function SchedulesPage() {
   const error = listError ? serializeError(listError) : "";
 
   const byDate = useMemo(
-    () => [...(schedulesQuery.data ?? [])].sort((a, b) => (a.trdate < b.trdate ? -1 : a.trdate > b.trdate ? 1 : 0)),
+    () =>
+      [...(schedulesQuery.data ?? [])].sort(
+        (a, b) =>
+          (a.trdate < b.trdate ? -1 : a.trdate > b.trdate ? 1 : 0) ||
+          a.trtime.localeCompare(b.trtime)
+      ),
     [schedulesQuery.data]
   );
 
@@ -69,7 +74,7 @@ export default function SchedulesPage() {
           {byDate.length === 0 ? (
             <p className="text-slate-400">No schedules yet — add one above.</p>
           ) : (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
               {byDate.map((s) => (
                 <ScheduleCard
                   key={s._id}

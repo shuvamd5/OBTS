@@ -4,13 +4,14 @@ import { routesApi } from "../api/routes";
 import { referenceApi } from "../api/reference";
 import { serializeError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { isStaff } from "../lib/roles";
+import { isAdmin, isStaff } from "../lib/roles";
 import type { Route } from "../types";
 import RouteCard from "../components/routes/RouteCard";
 
 export default function RoutesPage() {
   const { user } = useAuth();
   const staff = isStaff(user);
+  const isAdminRole = isAdmin(user);
   const queryClient = useQueryClient();
 
   const routesQuery = useQuery({
@@ -53,6 +54,7 @@ export default function RoutesPage() {
             key={r._id}
             route={r}
             canEdit={staff}
+            isAdminRole={isAdminRole}
             locations={locationsQuery.data ?? []}
             onChanged={() => reload()}
           />
