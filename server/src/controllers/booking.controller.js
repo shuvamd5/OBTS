@@ -9,6 +9,7 @@ import User from '../models/User.js';
 import { seatAt, seatRows } from '../domain/seatmap.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { runInTransaction } from '../utils/tx.js';
+import { computeArrival } from '../utils/routeDuration.js';
 
 const DAY = 86400000;
 const HOLD_MS = 10 * 60 * 1000; // 10 min seat lock
@@ -79,6 +80,26 @@ function routeMatches(route, sp, fp) {
   return scpid < fcpid;
 }
 
+// Checkpoint town names strictly between sp and fp (drives the stop picker).
+function intermediateStops(route, sp, fp) {
+  if (sp === route.sp && fp === route.fp) return route.checkpoints.map((c) => c.route);
+  const spIdx = sp === route.sp ? -1 : route.checkpoints.findIndex((c) => c.route === sp);
+  const fpIdx = fp === route.fp ? route.checkpoints.length : route.checkpoints.findIndex((c) => c.route === fp);
+  if (spIdx >= fpIdx) return [];
+  return route.checkpoints.slice(spIdx + 1, fpIdx).map((c) => c.route);
+}
+
+// K1: a requested intermediate stop must lie strictly between sp and fp.
+function routeCoversStops(route, sp, fp, stops) {
+  const spIdx = sp === route.sp ? -1 : route.checkpoints.findIndex((c) => c.route === sp);
+  const fpIdx = fp === route.fp ? route.checkpoints.length : route.checkpoints.findIndex((c) => c.route === fp);
+  if (spIdx >= fpIdx) return false;
+  return stops.every((stop) => {
+    const idx = route.checkpoints.findIndex((c) => c.route === stop);
+    return idx > spIdx && idx < fpIdx;
+  });
+}
+
 const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
   const seg = segmentFor(route, addroute.price, sp, fp);
   if (!seg) return null;
@@ -123,10 +144,18 @@ const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
       plateNumber: bus.plateNumber,
       busType: { _id: busType._id ?? null, name: busType.name ?? null, seatCount },
       amenities: bus.amenities ?? [],
+      rating: bus.rating ?? 0,
     },
     trdate: schedule.trdate,
     trtime: schedule.trtime,
-    route: { rid: route._id, sp: route.sp, fp: route.fp },
+    arrival: computeArrival(schedule.trtime, route.durationMinutes ?? null),
+    route: {
+      rid: route._id,
+      sp: route.sp,
+      fp: route.fp,
+      stops: intermediateStops(route, sp, fp),
+      durationMinutes: route.durationMinutes ?? null,
+    },
     query: { sp, fp },
     cpid: { sp: seg.scpid, fp: seg.fcpid },
     price: seg.price,
@@ -137,7 +166,19 @@ const buildOffer = async (addroute, schedule, bus, route, sp, fp) => {
 };
 
 export const searchOffers = asyncHandler(async (req, res) => {
-  const { sp, fp, date, order } = req.validated.query;
+  const {
+    sp,
+    fp,
+    date,
+    order,
+    busType,
+    amenities,
+    stops,
+    minPrice,
+    maxPrice,
+    fromTime,
+    toTime,
+  } = req.validated.query;
 
   const [spLoc, fpLoc] = await Promise.all([
     Location.findOne({ name: sp }).lean(),
@@ -185,12 +226,34 @@ export const searchOffers = asyncHandler(async (req, res) => {
     if (!bus) continue;
     const route = routeMap.get(String(price.rid));
     if (!route) continue;
+
+    // K1 — intermediate stop filter (checkpoint strictly between sp/fp).
+    if (stops?.length && !routeCoversStops(route, sp, fp, stops)) continue;
+
     const offer = await buildOffer(price, schedule, bus, route, sp, fp);
-    if (offer) offers.push(offer);
+    if (!offer) continue;
+
+    // K3 — bus type / amenities / price range / departure-time filters.
+    if (busType?.length && !busType.some((id) => String(bus.busTypeId?._id ?? '') === id)) continue;
+    const amenitySet = new Set((offer.bus.amenities ?? []).map((a) => a.toLowerCase()));
+    if (amenities?.length && !amenities.every((a) => amenitySet.has(a))) continue;
+    if (minPrice !== undefined && offer.price < minPrice) continue;
+    if (maxPrice !== undefined && offer.price > maxPrice) continue;
+    if (fromTime !== undefined && offer.trtime < fromTime) continue;
+    if (toTime !== undefined && offer.trtime > toTime) continue;
+
+    offers.push(offer);
   }
 
   if (order === 'price') offers.sort((a, b) => a.price - b.price);
   else if (order === 'time') offers.sort((a, b) => a.trtime.localeCompare(b.trtime));
+  else if (order === 'arrival') {
+    offers.sort((a, b) => (a.arrival ?? '99:99').localeCompare(b.arrival ?? '99:99'));
+  } else if (order === 'rating') {
+    offers.sort(
+      (a, b) => (b.bus.rating ?? 0) - (a.bus.rating ?? 0) || a.price - b.price
+    );
+  }
 
   res.json({ offers });
 });
@@ -210,7 +273,9 @@ const findEligible = async (arid) => {
 };
 
 const createBooking = async (req, res, action) => {
-  const { arid, sno, sp, fp } = req.validated.body;
+  const { arid, sp, fp } = req.validated.body;
+  const snos = [...new Set(req.validated.body.sno)];
+  if (snos.length === 0) throw new AppError(400, 'At least one seat is required');
 
   const { addroute, schedule, route, bus } = await findEligible(arid);
 
@@ -228,11 +293,13 @@ const createBooking = async (req, res, action) => {
   if (!seg) throw new AppError(400, 'Invalid travel segment');
 
   const seatCount = bus.busTypeId?.seatCount ?? 37;
-  const seatDef = seatAt(seatCount, sno - 1);
-  if (!seatDef) throw new AppError(400, 'Invalid seat number');
+  const seatDefs = snos.map((sno) => seatAt(seatCount, sno - 1));
+  if (seatDefs.some((def) => !def)) throw new AppError(400, 'Invalid seat number');
 
   await releaseExpiredHeld();
-  const occupied = await Seat.find({ arid, sno }).select('spcpid fpcpid status').lean();
+  const occupied = await Seat.find({ arid, sno: { $in: snos } })
+    .select('sno spcpid fpcpid status')
+    .lean();
   for (const row of occupied) {
     if (!overlaps(seg.scpid, seg.fcpid, row.spcpid, row.fpcpid)) continue;
     if (row.status === 'reserved') throw new AppError(409, 'the selected seat has been reserved');
@@ -244,31 +311,28 @@ const createBooking = async (req, res, action) => {
 
   const seatStatus = action === 'confirm' ? 'reserved' : 'held';
   const ticketStatus = action === 'confirm' ? 'R' : 'P';
-  const { ticket, seat } = await runInTransaction(async (session) => {
+  const { tickets, seats } = await runInTransaction(async (session) => {
     const s = session ? { session } : {};
 
-    let seat;
+    let created;
     try {
-      const seats = await Seat.create(
-        [
-          {
-            arid,
-            sno,
-            sp,
-            spcpid: seg.scpid,
-            fp,
-            fpcpid: seg.fcpid,
-            price: seg.price,
-            uid: req.user._id,
-            status: seatStatus,
-            lockExpiry: action === 'confirm' ? null : new Date(Date.now() + HOLD_MS),
-            trdate: schedule.trdate,
-            trtime: schedule.trtime,
-          },
-        ],
-        s
+      created = await Seat.create(
+        snos.map((sno) => ({
+          arid,
+          sno,
+          sp,
+          spcpid: seg.scpid,
+          fp,
+          fpcpid: seg.fcpid,
+          price: seg.price,
+          uid: req.user._id,
+          status: seatStatus,
+          lockExpiry: action === 'confirm' ? null : new Date(Date.now() + HOLD_MS),
+          trdate: schedule.trdate,
+          trtime: schedule.trtime,
+        })),
+        { ...s, ordered: true }
       );
-      seat = seats[0];
     } catch (err) {
       if (err?.code === 11000) {
         throw new AppError(409, 'Seat already booked for this segment');
@@ -276,47 +340,77 @@ const createBooking = async (req, res, action) => {
       throw err;
     }
 
-    const ledgerInc = action === 'confirm' ? { reservedtc: 1 } : { pendingtc: 1 };
+    const n = snos.length;
+    const ledgerInc = action === 'confirm' ? { reservedtc: n } : { pendingtc: n };
     await User.updateOne(
       { _id: req.user._id },
-      { $inc: { totaltc: 1, ...ledgerInc, due: seg.price, points: 1 } },
+      { $inc: { totaltc: n, ...ledgerInc, due: seg.price * n, points: n } },
       s
     );
 
-    const tickets = await Ticket.create(
-      [
-        {
-          arid,
-          ssid: seat._id,
-          trdate: schedule.trdate,
-          trtime: schedule.trtime,
-          sno,
-          blc: seatDef.blc,
-          sna: seatDef.sna,
-          price: seg.price,
-          uid: req.user._id,
-          treby: req.user.uname,
-          tstatus: ticketStatus,
-          payment: 'due',
-          pyreby: 'none',
-        },
-      ],
-      s
+    const createdTickets = await Ticket.create(
+      snos.map((sno, i) => ({
+        arid,
+        ssid: created[i]._id,
+        trdate: schedule.trdate,
+        trtime: schedule.trtime,
+        sno,
+        blc: seatDefs[i].blc,
+        sna: seatDefs[i].sna,
+        price: seg.price,
+        uid: req.user._id,
+        treby: req.user.uname,
+        tstatus: ticketStatus,
+        payment: 'due',
+        pyreby: 'none',
+      })),
+      { ...s, ordered: true }
     );
-    return { seat, ticket: tickets[0] };
+
+    return {
+      seats: created.map((seat) => ({
+        _id: seat._id,
+        arid,
+        sno: seat.sno,
+        sp,
+        fp,
+        price: seat.price,
+        status: seat.status,
+        trdate: schedule.trdate,
+        trtime: schedule.trtime,
+      })),
+      tickets: createdTickets.map((t) => ({
+        _id: t._id,
+        arid,
+        ssid: t.ssid,
+        trdate: t.trdate,
+        trtime: t.trtime,
+        sno: t.sno,
+        blc: t.blc,
+        sna: t.sna,
+        price: t.price,
+        uid: t.uid,
+        treby: t.treby,
+        tstatus: t.tstatus,
+        payment: t.payment,
+        pyreby: t.pyreby,
+      })),
+    };
   });
 
   res.status(201).json({
     message: 'registration complete',
-    ticket,
-    seat,
+    tickets,
+    seats,
+    ticket: tickets[0],
+    seat: seats[0],
     bus: {
       bname: bus.bname,
       plateNumber: bus.plateNumber,
       busType: { _id: bus.busTypeId?._id ?? null, name: bus.busTypeId?.name ?? null, seatCount: bus.busTypeId?.seatCount ?? 37 },
       amenities: bus.amenities ?? [],
     },
-    price: seg.price,
+    price: seg.price * snos.length,
   });
 };
 

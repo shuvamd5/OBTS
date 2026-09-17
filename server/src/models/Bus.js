@@ -7,6 +7,7 @@ const busSchema = new mongoose.Schema(
     busTypeId: { type: mongoose.Schema.Types.ObjectId, ref: 'BusType', required: true },
     bname: { type: String, required: true },
     amenities: { type: [String], default: [] },
+    rating: { type: Number, min: 0, max: 5, default: 0 },
     bstatus: { type: String, enum: BUS_STATUSES, default: 'pending' },
     bsapby: { type: String, default: 'none' },
     uid: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null, index: true },

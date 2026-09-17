@@ -163,6 +163,7 @@ export default function BusCard({
           ) : (
             ""
           )}
+          {bus.rating > 0 && <span className="text-amber-500"> · ★ {bus.rating.toFixed(1)}</span>}
         </p>
         <div className="flex min-h-10 flex-wrap items-center gap-1 text-xs">
           {(bus.amenities ?? []).map((a) => (

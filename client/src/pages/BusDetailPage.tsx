@@ -45,10 +45,11 @@ export default function BusDetailPage() {
   const [editing, setEditing] = useState(false);
   const [bname, setBname] = useState("");
   const [amenities, setAmenities] = useState<string[]>([]);
+  const [rating, setRating] = useState(0);
   const [confirm, setConfirm] = useState(false);
 
   const updateMutation = useMutation({
-    mutationFn: (payload: { bname?: string; amenities?: string[] }) =>
+    mutationFn: (payload: { bname?: string; amenities?: string[]; rating?: number }) =>
       busesApi.update(id, payload).then(({ data }) => data.bus),
     onSuccess: (b) => {
       patchBus(b);
@@ -89,6 +90,7 @@ export default function BusDetailPage() {
   const startEdit = () => {
     setBname(bus.bname);
     setAmenities(bus.amenities ?? []);
+    setRating(bus.rating ?? 0);
     setEditing(true);
   };
 
@@ -129,6 +131,10 @@ export default function BusDetailPage() {
             <span className="font-medium text-slate-800">
               {(bus.amenities ?? []).length > 0 ? (bus.amenities ?? []).map((a) => a).join(", ") : "—"}
             </span>
+          </div>
+          <div className="flex justify-between sm:block">
+            <span className="text-slate-500">Rating</span>
+            <span className="font-medium text-slate-800">{bus.rating > 0 ? `★ ${bus.rating}` : "—"}</span>
           </div>
           {bus.ownerName && (
             <div className="flex justify-between sm:block">
@@ -228,11 +234,25 @@ export default function BusDetailPage() {
                 ))}
               </div>
             </div>
+            <div className="mb-3">
+              <label className="mb-1 block px-1 text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Rating (0–5)
+              </label>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                step="0.5"
+                value={rating}
+                onChange={(e) => setRating(Number(e.target.value))}
+                className="input px-2 py-1.5 text-sm"
+              />
+            </div>
             <div className="flex items-center gap-2">
               <Button
                 size="sm"
                 disabled={updateMutation.isPending}
-                onClick={() => void updateMutation.mutate({ bname: bname.trim(), amenities })}
+                onClick={() => void updateMutation.mutate({ bname: bname.trim(), amenities, rating })}
               >
                 Save
               </Button>

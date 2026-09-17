@@ -34,8 +34,15 @@ try {
   ok('row splits + blockB for 29 31 33 35 37 39 41 43 45');
 
   const g = generateSeatMap(37);
-  assert.deepEqual(g.labels, Array.from({ length: 37 }, (_, i) => `${i + 1}`));
-  ok('labels are numeric 1..N');
+  assert.deepEqual(g.labels, [
+    '2', '4', '6', '8', '10', '12', '14', '16', '18', // row 1 (driver side, evens)
+    '1', '3', '5', '7', '9', '11', '13', '15', '17', // row 2 (odds)
+    '19', // corridor seat
+    '1', '3', '5', '7', '9', '11', '13', '15', '17', // row 4 (odds)
+    '2', '4', '6', '8', '10', '12', '14', '16', '18', // row 5 (evens)
+  ]);
+  assert.equal(g.labels.length, 37);
+  ok('labels follow the compartment numbering (evens/odds + corridor seat)');
 
   for (const bad of [0, 1, 27, 28, 30, 38, 44, -5]) {
     assert.throws(() => generateSeatMap(bad));
@@ -51,6 +58,16 @@ try {
   assert.equal(seatAt(39, 19).blc, 'B');
   assert.equal(seatAt(39, 20).blc, 'A');
   ok('seatAt sno/blc block split (37/39)');
+
+  assert.equal(seatAt(37, 0).sna, '2');
+  assert.equal(seatAt(37, 8).sna, '18');
+  assert.equal(seatAt(37, 17).sna, '17');
+  assert.equal(seatAt(37, 18).sna, '19');
+  assert.equal(seatAt(37, 19).sna, '1');
+  assert.equal(seatAt(37, 36).sna, '18');
+  assert.equal(seatAt(39, 0).sna, '2');
+  assert.equal(seatAt(39, 20).sna, '21');
+  ok('seatAt returns the compartment-oriented labels');
 
   assert.equal(seatRows(45).length, 5);
   ok('seatRows wraps layoutFor');

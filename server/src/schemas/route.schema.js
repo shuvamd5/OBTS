@@ -2,12 +2,15 @@ import { z } from 'zod';
 
 const townName = z.string().trim().min(1, 'Town is required');
 
+const durationMinutes = z.number().finite().nonnegative();
+
 export const routeCreateSchema = z
   .object({
     sp: townName,
     fp: townName,
     distance: z.number().finite().positive(),
     duration: z.string().trim().min(1, 'Duration is required'),
+    durationMinutes: durationMinutes.optional(),
   })
   .refine((v) => v.sp !== v.fp, {
     message: 'Start point and end point must be different towns',
@@ -20,11 +23,16 @@ export const routeEditSchema = z
     fp: townName.optional(),
     distance: z.number().finite().positive().optional(),
     duration: z.string().trim().min(1, 'Duration is required').optional(),
+    durationMinutes: durationMinutes.optional(),
   })
   .refine(
     (v) =>
-      v.sp !== undefined || v.fp !== undefined || v.distance !== undefined || v.duration !== undefined,
-    { message: 'Provide at least one of sp/fp/distance/duration' }
+      v.sp !== undefined ||
+      v.fp !== undefined ||
+      v.distance !== undefined ||
+      v.duration !== undefined ||
+      v.durationMinutes !== undefined,
+    { message: 'Provide at least one of sp/fp/distance/duration/durationMinutes' }
   )
   .refine((v) => !(v.sp !== undefined && v.fp !== undefined && v.sp === v.fp), {
     message: 'Start point and end point must be different towns',

@@ -32,8 +32,8 @@ export default function Layout() {
 
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 text-slate-900">
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
+      <header className="sticky top-0 z-40 border-b border-slate-200 bg-white shadow-sm">
+        <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
           <Link to="/" className="text-lg font-bold tracking-tight text-brand-700">
             eYatra
           </Link>

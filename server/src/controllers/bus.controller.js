@@ -38,7 +38,7 @@ export const listBuses = asyncHandler(async (req, res) => {
 });
 
 export const createBus = asyncHandler(async (req, res) => {
-  const { plateNumber, busTypeId, bname, amenities } = req.validated.body;
+  const { plateNumber, busTypeId, bname, amenities, rating } = req.validated.body;
 
   await assertTypeExists(busTypeId);
 
@@ -50,6 +50,7 @@ export const createBus = asyncHandler(async (req, res) => {
     busTypeId,
     bname,
     amenities,
+    rating,
     bsapby: 'none',
     uid: req.user.ustatus === 'operator' ? req.user._id : null,
   });
@@ -90,7 +91,7 @@ export const updateBus = asyncHandler(async (req, res) => {
     if (dup) throw new AppError(409, 'A bus with this plate number already exists');
   }
 
-  const infoFields = ['plateNumber', 'busTypeId', 'bname', 'amenities'];
+  const infoFields = ['plateNumber', 'busTypeId', 'bname', 'amenities', 'rating'];
   const infoChanged = infoFields.some((k) => {
     const v = body[k];
     if (v === undefined) return false;

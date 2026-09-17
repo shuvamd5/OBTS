@@ -1,43 +1,66 @@
-import type { BookingOffer, OfferSeat } from "../../types";
-import { MapPinIcon } from "../icons";
+import type { KeyboardEvent } from "react";
+import type { BookingOffer } from "../../types";
 import Card from "../ui/Card";
-import { SeatMap } from "./SeatMap";
+import { ChevronDownIcon } from "../icons";
 
 export default function OfferCard({
   offer,
-  canBook,
-  onPick,
+  expanded,
+  onExpand,
 }: {
   offer: BookingOffer;
-  canBook: boolean;
-  onPick: (seat: OfferSeat) => void;
+  expanded: boolean;
+  onExpand: () => void;
 }) {
+  const rating = offer.bus.rating > 0 ? `★ ${offer.bus.rating.toFixed(1)}` : null;
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onExpand();
+    }
+  };
+
   return (
-    <Card pad="5">
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="text-lg font-bold text-slate-900">{offer.bus.bname}</div>
-          <div className="text-sm text-slate-500">
-            {offer.bus.plateNumber} · {offer.bus.busType?.name ?? "—"} · {offer.bus.busType?.seatCount ?? "—"} seats
-          </div>
-          <div className="mt-1 flex items-center gap-1 text-sm text-slate-500">
-            <MapPinIcon className="h-3.5 w-3.5" />
-            {offer.route.sp} &gt; {offer.route.fp}
-            <span className="mx-1 text-slate-300">·</span>
-            {offer.trdate} <span className="font-medium text-slate-700">{offer.trtime}</span>
-          </div>
+    <Card
+      role="button"
+      tabIndex={0}
+      aria-expanded={expanded}
+      onClick={onExpand}
+      onKeyDown={handleKeyDown}
+      className={`cursor-pointer select-none transition-shadow hover:shadow-md ${
+        expanded ? "border-brand-300 ring-2 ring-brand-200" : ""
+      }`}
+    >
+      <div className="flex items-center gap-4">
+        <div className="w-14 shrink-0 text-center">
+          <p className="text-base font-bold leading-5 text-slate-900">{offer.trtime}</p>
+          {offer.arrival && (
+            <p className="mt-0.5 text-xs leading-4 text-slate-500">Arr {offer.arrival}</p>
+          )}
         </div>
-        <div className="text-right">
-          <div className="stat-hero">Rs {offer.price}</div>
-          <div className="text-xs text-slate-400">
-            seats {offer.bus.busType?.seatCount ?? "—"} · Available {offer.counts.available} · Held{" "} {offer.counts.held} · Reserved {offer.counts.reserved}
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5">
+            <p className="truncate text-sm font-semibold text-slate-900">{offer.bus.bname}</p>
+            {rating && <span className="shrink-0 text-xs text-amber-500">{rating}</span>}
           </div>
+          <p className="truncate text-xs text-slate-500">
+            {offer.bus.busType?.name ?? "—"} · {offer.bus.plateNumber}
+          </p>
         </div>
+
+        <div className="shrink-0 text-right">
+          <p className="text-base font-bold leading-5 text-slate-900">Rs {offer.price}</p>
+          <p className="text-xs text-emerald-600">
+            {offer.counts.available} seat{offer.counts.available === 1 ? "" : "s"} left
+          </p>
+        </div>
+
+        <ChevronDownIcon
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+        />
       </div>
-
-      <SeatMap offer={offer} onPick={onPick} />
-
-      {!canBook && <p className="mt-3 text-xs text-slate-400">Login to select a seat and book.</p>}
     </Card>
   );
 }

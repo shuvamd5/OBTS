@@ -39,18 +39,31 @@ function HoldBadge({ lockExpiry }: { lockExpiry: string | null | undefined }) {
   );
 }
 
-function SeatCell({ seat, blocked, onClick }: { seat: OfferSeat; blocked: boolean; onClick: () => void }) {
-  const label = `${seat.blc} ${seat.sna}`;
+function SeatCell({
+  seat,
+  blocked,
+  selected,
+  onClick,
+}: {
+  seat: OfferSeat;
+  blocked: boolean;
+  selected: boolean;
+  onClick: () => void;
+}) {
+  const label = `${seat.blc}${seat.sna}`;
   return (
-    <div className="relative">
+    <div className="relative aspect-square w-full">
       <button
         type="button"
         disabled={blocked}
-        aria-label={`Seat ${seat.blc} ${seat.sna}, ${seat.status}`}
+        aria-label={`Seat ${seat.blc}${seat.sna}, ${seat.status}`}
         title={seat.status === "reserved" ? "reserved" : seat.status === "held" ? "held" : undefined}
         onClick={onClick}
-        className={`flex h-9 min-w-9 items-center justify-center rounded-btn border text-xs font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
-          SEAT_STYLE[seat.status]
+        aria-pressed={selected}
+        className={`flex h-full w-full items-center justify-center rounded-btn border text-[15px] font-semibold outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-1 ${
+          selected
+            ? "border-brand-500 bg-brand-100 text-brand-700 ring-2 ring-brand-400"
+            : SEAT_STYLE[seat.status]
         } ${blocked ? "cursor-not-allowed" : "cursor-pointer"}`}
       >
         {label}
@@ -61,36 +74,75 @@ function SeatCell({ seat, blocked, onClick }: { seat: OfferSeat; blocked: boolea
 }
 
 
-export function SeatMap({ offer, onPick }: { offer: BookingOffer; onPick: (seat: OfferSeat) => void }) {
+export function SeatMap({
+  offer,
+  selectedSnos,
+  onPick,
+}: {
+  offer: BookingOffer;
+  selectedSnos: Set<number>;
+  onPick: (seat: OfferSeat) => void;
+}) {
   const seatsBySno = new Map(offer.seats.map((s) => [s.sno, s]));
+  const maxSeats = Math.max(...offer.rows.map((r) => r.seats.length));
   return (
-    <div className="overflow-x-auto">
-      <div
-        role="grid"
-        aria-label={`Seat map for ${offer.bus.bname} from ${offer.route.sp} to ${offer.route.fp}`}
-        className="inline-flex flex-col gap-2"
-      >
-        {offer.rows.map((row, ri) => (
-          <div key={ri} role="row" className="flex items-end gap-2">
-            <div role="rowheader" className="w-12 text-[10px] font-semibold uppercase leading-none text-slate-400">
-              {row.left ?? ""}
+    <div
+      role="grid"
+      aria-label={`Seat map for ${offer.bus.bname} from ${offer.route.sp} to ${offer.route.fp}`}
+      className="mx-auto w-full max-w-[22rem] space-y-1.5"
+    >
+      {offer.rows.map((row, ri) => {
+        const corridor = row.left === "Corridor";
+        const pads = corridor ? maxSeats - row.seats.length : 0;
+        return (
+          <div
+            key={ri}
+            role="row"
+            className="grid items-stretch gap-1"
+            style={{ gridTemplateColumns: `3rem repeat(${maxSeats}, minmax(0, 1fr))` }}
+          >
+            <div
+              role="rowheader"
+              className={
+                corridor
+                  ? "flex items-center"
+                  : "flex items-center text-[12px] font-semibold uppercase leading-none tracking-wide text-slate-400"
+              }
+            >
+              {corridor ? "" : (row.left ?? "")}
             </div>
-            <div role="rowgroup" className="flex flex-wrap gap-1.5">
-              {row.seats.map((iter) => {
-                const seat = seatsBySno.get(iter + 1)!;
-                return (
-                  <SeatCell
-                    key={seat.sno}
-                    seat={seat}
-                    blocked={seat.status !== "available"}
-                    onClick={() => onPick(seat)}
-                  />
-                );
-              })}
-            </div>
+            {Array.from({ length: maxSeats }).map((_, col) => {
+              const iter = row.seats[col - pads];
+              if (iter === undefined) {
+                if (corridor && col === 0) {
+                  return (
+                    <div
+                      key="corridor"
+                      aria-hidden
+                      className="flex items-center justify-center text-[12px] font-semibold uppercase tracking-[0.3em] text-slate-500"
+                      style={{ gridColumn: `2 / ${maxSeats + 1}` }}
+                    >
+                      {row.left}
+                    </div>
+                  );
+                }
+                if (corridor) return null;
+                return <div key={`gap-${col}`} aria-hidden />;
+              }
+              const seat = seatsBySno.get(iter + 1)!;
+              return (
+                <SeatCell
+                  key={seat.sno}
+                  seat={seat}
+                  blocked={seat.status !== "available"}
+                  selected={selectedSnos.has(seat.sno)}
+                  onClick={() => onPick(seat)}
+                />
+              );
+            })}
           </div>
-        ))}
-      </div>
+        );
+      })}
     </div>
   );
 }

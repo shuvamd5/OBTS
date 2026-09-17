@@ -53,6 +53,7 @@ export interface Route {
   rsapby: string;
   distance: number;
   duration: string;
+  durationMinutes: number | null;
 }
 
 export type BusStatus = "pending" | "active" | "inactive";
@@ -78,6 +79,7 @@ export interface Bus {
   busType: BusBusType | null;
   bname: string;
   amenities: string[];
+  rating: number;
   bstatus: BusStatus;
   bsapby: string;
   uid: string | null;
@@ -159,6 +161,7 @@ export interface OfferBus {
   plateNumber: string;
   busType: { _id: string | null; name: string | null; seatCount: number } | null;
   amenities: string[];
+  rating: number;
 }
 
 export interface BookingOffer {
@@ -168,44 +171,51 @@ export interface BookingOffer {
   bus: OfferBus;
   trdate: string;
   trtime: string;
-  route: { rid: string; sp: string; fp: string };
+  route: { rid: string; sp: string; fp: string; stops: string[]; durationMinutes: number | null };
   query: { sp: string; fp: string };
   cpid: { sp: number; fp: number };
   price: number;
+  arrival: string | null;
   counts: { available: number; held: number; reserved: number };
   seats: OfferSeat[];
   rows: OfferRow[];
 }
 
+export interface BookingTicket {
+  _id: string;
+  arid: string;
+  ssid: string;
+  trdate: string;
+  trtime: string;
+  sno: number;
+  blc: string;
+  sna: string;
+  price: number;
+  uid: string;
+  treby: string;
+  tstatus: TicketStatus;
+  payment: string;
+  pyreby: string;
+}
+
+export interface BookingSeat {
+  _id: string;
+  arid: string;
+  sno: number;
+  sp: string;
+  fp: string;
+  price: number;
+  status: SeatStatus;
+  trdate: string;
+  trtime: string;
+}
+
 export interface BookingResult {
   message: string;
-  ticket: {
-    _id: string;
-    arid: string;
-    ssid: string;
-    trdate: string;
-    trtime: string;
-    sno: number;
-    blc: string;
-    sna: string;
-    price: number;
-    uid: string;
-    treby: string;
-    tstatus: TicketStatus;
-    payment: string;
-    pyreby: string;
-  };
-  seat: {
-    _id: string;
-    arid: string;
-    sno: number;
-    sp: string;
-    fp: string;
-    price: number;
-    status: SeatStatus;
-    trdate: string;
-    trtime: string;
-  };
+  tickets?: BookingTicket[];
+  ticket: BookingTicket;
+  seats?: BookingSeat[];
+  seat: BookingSeat;
   bus: {
     bname: string;
     plateNumber: string;

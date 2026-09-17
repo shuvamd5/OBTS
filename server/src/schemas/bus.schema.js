@@ -11,11 +11,14 @@ const busTypeId = z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid bus type id');
 
 const amenities = z.array(z.string().trim().min(1)).default([]);
 
+const rating = z.number().finite().min(0).max(5);
+
 export const busCreateSchema = z.object({
   plateNumber,
   busTypeId,
   bname: z.string().trim().min(1, 'Bus name is required'),
   amenities,
+  rating: rating.optional(),
 });
 
 export const busEditSchema = z.object({
@@ -23,6 +26,7 @@ export const busEditSchema = z.object({
   busTypeId: busTypeId.optional(),
   bname: z.string().trim().min(1, 'Bus name is required').optional(),
   amenities: amenities.optional(),
+  rating: rating.optional(),
 });
 
 export const busStatusSchema = z.object({

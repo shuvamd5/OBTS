@@ -1,28 +1,28 @@
-import type { BookingOffer, BookingResult, OfferSeat } from "../../types";
+import { fmtDate } from "../../lib/date";
+import type { BookingOffer, BookingResult } from "../../types";
 import { BackIcon, PrinterIcon } from "../icons";
 import Button from "../ui/Button";
 
 export default function TicketDisplay({
   result,
   offer,
-  seat,
   onBack,
 }: {
   result: BookingResult;
   offer: BookingOffer;
-  seat: OfferSeat;
   onBack: () => void;
 }) {
+  const tickets = result.tickets ?? [result.ticket];
+  const seatsLabel = tickets.map((t) => `${t.blc}${t.sna}`).join(", ");
   const rows: [string, string][] = [
     ["Name", result.ticket.treby],
     ["Bus name", result.bus.bname],
     ["Plate number", result.bus.plateNumber],
     ["Bus type", result.bus.busType?.name ?? "—"],
-    ["Seats", result.bus.busType ? String(result.bus.busType.seatCount) : "—"],
     ["Travel", `${offer.query.sp} > ${offer.query.fp}`],
-    ["date and time", `${offer.trdate} ${offer.trtime}`],
-    ["Seat no", `${seat.blc} ${seat.sna}`],
-    ["Price", `Rs ${result.price}`],
+    ["date and time", `${fmtDate(offer.trdate)} ${offer.trtime}`],
+    ["Seats", seatsLabel],
+    ["Total price", `Rs ${result.price}`],
     ["Seat status", result.ticket.tstatus === "R" ? "Reserved" : "Pending"],
     ["Payment", result.ticket.payment],
   ];

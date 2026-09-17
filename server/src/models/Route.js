@@ -17,6 +17,7 @@ const routeSchema = new mongoose.Schema(
     rsapby: { type: String, default: 'none' },
     distance: { type: Number, required: true, min: 0 },
     duration: { type: String, required: true, trim: true },
+    durationMinutes: { type: Number, min: 0, default: null },
   },
   { timestamps: true }
 );

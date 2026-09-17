@@ -142,8 +142,9 @@ export const updateRoute = asyncHandler(async (req, res) => {
   }
   assertPriceCoversRoute(route, scheduleRoute.price);
 
+  const schedule = await BusSchedule.findById(scheduleRoute.bsid).select('bsstatus').lean();
   scheduleRoute.rid = rid;
-  scheduleRoute.arstatus = 'pending';
+  scheduleRoute.arstatus = schedule?.bsstatus === 'approved' ? 'approved' : 'pending';
   await scheduleRoute.save();
 
   res.json({ scheduleRoute, message: 'Route updated' });
@@ -168,8 +169,9 @@ export const updatePrice = asyncHandler(async (req, res) => {
   }
   assertPriceCoversRoute(route, price);
 
+  const schedule = await BusSchedule.findById(scheduleRoute.bsid).select('bsstatus').lean();
   scheduleRoute.price = price;
-  scheduleRoute.arstatus = 'pending';
+  scheduleRoute.arstatus = schedule?.bsstatus === 'approved' ? 'approved' : 'pending';
   await scheduleRoute.save();
 
   res.json({ scheduleRoute, message: 'Price updated' });

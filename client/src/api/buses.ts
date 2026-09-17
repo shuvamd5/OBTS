@@ -6,6 +6,7 @@ export interface BusCreatePayload {
   busTypeId: string;
   bname: string;
   amenities: string[];
+  rating?: number;
 }
 
 export type BusEditPayload = Partial<BusCreatePayload>;

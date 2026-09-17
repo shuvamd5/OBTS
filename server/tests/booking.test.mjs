@@ -405,6 +405,46 @@ try {
   assert.equal(uL.points, 4);
   ok('expired pending booking reverses ledger (totaltc/pendingtc/due/points)');
 
+  // ---- multi-seat booking: array sno ----
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({ arid: price._id, sno: [8, 9], sp: 'Butwal', fp: 'Pokhara' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.tickets.length, 2);
+  assert.equal(r.body.seats.length, 2);
+  assert.equal(String(r.body.ticket._id), String(r.body.tickets[0]._id));
+  assert.equal(r.body.seat.sno, 8);
+  assert.equal(r.body.price, 2000);
+  uL = await User.findById(userB._id).lean();
+  assert.equal(uL.totaltc, 6);
+  assert.equal(uL.pendingtc, 5);
+  assert.equal(uL.reservedtc, 1);
+  assert.equal(uL.due, 5000);
+  assert.equal(uL.points, 6);
+  ok('multi-seat pending 201 -> 2 tickets, total price, ledger x2');
+
+  // duplicate snos in one request collapse to a single seat
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({ arid: price._id, sno: [10, 10], sp: 'Butwal', fp: 'Pokhara' });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  assert.equal(r.body.tickets.length, 1);
+  uL = await User.findById(userB._id).lean();
+  assert.equal(uL.totaltc, 7);
+  assert.equal(uL.pendingtc, 6);
+  ok('duplicate sno array collapsed to 1 ticket');
+
+  // any invalid sno in the array -> 400 before any write
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({ arid: price._id, sno: [3, 999], sp: 'Butwal', fp: 'Pokhara' });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.message, 'Invalid seat number');
+  ok('array with invalid sno -> 400');
+
   // ---- schedule delete = soft delete: seats + tickets retained ----
   r = await request(app).delete(`/api/schedules/${sched._id}`).set(auth(adminToken));
   assert.equal(r.status, 200);

@@ -3,7 +3,11 @@ import Route from '../models/Route.js';
 import Location from '../models/Location.js';
 import ScheduleRoute from '../models/ScheduleRoute.js';
 import Seat from '../models/Seat.js';
-import { AppError, asyncHandler } from '../middleware/errorHandler.js';
+import {
+  AppError,
+  asyncHandler,
+} from '../middleware/errorHandler.js';
+import { parseDurationToMinutes } from '../utils/routeDuration.js';
 
 async function ensureLocation(name) {
   const found = await Location.findOne({ name });
@@ -44,7 +48,7 @@ export const listRoutes = asyncHandler(async (_req, res) => {
 });
 
 export const createRoute = asyncHandler(async (req, res) => {
-  const { sp, fp, distance, duration } = req.validated.body;
+  const { sp, fp, distance, duration, durationMinutes } = req.validated.body;
 
   await ensureLocation(sp);
   await ensureLocation(fp);
@@ -54,7 +58,13 @@ export const createRoute = asyncHandler(async (req, res) => {
     throw new AppError(409, 'Route already exists');
   }
 
-  const route = await Route.create({ sp, fp, distance, duration });
+  const route = await Route.create({
+    sp,
+    fp,
+    distance,
+    duration,
+    durationMinutes: durationMinutes ?? parseDurationToMinutes(duration),
+  });
   res.status(201).json({ route });
 });
 
@@ -65,7 +75,7 @@ export const updateRoute = asyncHandler(async (req, res) => {
     throw new AppError(404, 'Route not found');
   }
 
-  const { sp, fp, distance, duration } = req.validated.body;
+  const { sp, fp, distance, duration, durationMinutes } = req.validated.body;
 
   if (sp !== undefined) await ensureLocation(sp);
   if (fp !== undefined) await ensureLocation(fp);
@@ -82,6 +92,12 @@ export const updateRoute = asyncHandler(async (req, res) => {
   if (fp !== undefined && fp !== route.fp) changes.fp = fp;
   if (distance !== undefined && distance !== route.distance) changes.distance = distance;
   if (duration !== undefined && duration !== route.duration) changes.duration = duration;
+  if (durationMinutes !== undefined && durationMinutes !== route.durationMinutes) {
+    changes.durationMinutes = durationMinutes;
+  } else if (duration !== undefined && duration !== route.duration && durationMinutes === undefined) {
+    const parsed = parseDurationToMinutes(duration);
+    if (parsed !== null && parsed !== route.durationMinutes) changes.durationMinutes = parsed;
+  }
 
   if (Object.keys(changes).length === 0) {
     return res.json({ route, message: 'No change' });

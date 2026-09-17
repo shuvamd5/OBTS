@@ -6,7 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { BookingOffer, BookingResult, User } from "../types";
 
 const bookings = vi.hoisted(() => ({ search: vi.fn(), confirm: vi.fn(), pending: vi.fn() }));
-const reference = vi.hoisted(() => ({ locations: vi.fn() }));
+const reference = vi.hoisted(() => ({ locations: vi.fn(), busTypes: vi.fn() }));
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 
 vi.mock("../api/bookings", () => ({ bookingsApi: bookings }));
@@ -44,13 +44,15 @@ const offer: BookingOffer = {
     plateNumber: "BA 1 JA 2345",
     busType: { _id: "bt1", name: "Volvo A/C Seater", seatCount: 37 },
     amenities: ["wifi", "ac"],
+    rating: 4,
   },
   trdate: "2030-01-01",
   trtime: "08:00",
-  route: { rid: "r1", sp: "KTM", fp: "PKR" },
+  route: { rid: "r1", sp: "KTM", fp: "PKR", stops: [], durationMinutes: null },
   query: { sp: "KTM", fp: "PKR" },
   cpid: { sp: 0, fp: 100 },
   price: 500,
+  arrival: "14:30",
   counts: { available: 1, held: 0, reserved: 0 },
   seats: [{ sno: 1, blc: "B", sna: "1", status: "available", lockExpiry: null }],
   rows: [{ left: null, seats: [0] }],
@@ -113,18 +115,37 @@ async function fillSearchAndRun(user: ReturnType<typeof userEvent.setup>) {
   await user.selectOptions(combos[0], "KTM");
   await user.selectOptions(combos[1], "PKR");
   await user.click(screen.getByRole("button", { name: /book/i }));
-  await screen.findByText("Express Queen");
+  const card = await screen.findByRole("button", { name: /Express Queen/ });
+  await user.click(card);
+  await screen.findByRole("grid", { name: /Express Queen/ });
 }
 
 async function pickSeat(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(screen.getByRole("button", { name: /B 1/ }));
+  await user.click(screen.getByRole("button", { name: /B1/ }));
   await screen.findByText("Confirm booking");
 }
+
+const offer2: BookingOffer = {
+  ...offer,
+  counts: { available: 2, held: 0, reserved: 0 },
+  seats: [
+    { sno: 1, blc: "B", sna: "1", status: "available", lockExpiry: null },
+    { sno: 2, blc: "B", sna: "2", status: "available", lockExpiry: null },
+  ],
+  rows: [{ left: null, seats: [0, 1] }],
+};
 
 describe("BookingPage", () => {
   beforeEach(() => {
     auth.user = customer;
     reference.locations.mockResolvedValue({ data: { locations: ["KTM", "PKR"] } });
+    reference.busTypes.mockResolvedValue({
+      data: {
+        busTypes: [
+          { _id: "bt1", seatCount: 37, seatStyle: "luxury", name: "Volvo A/C Seater" },
+        ],
+      },
+    });
     bookings.search.mockResolvedValue({ data: { offers: [offer] } });
   });
 
@@ -143,7 +164,7 @@ describe("BookingPage", () => {
       await screen.findByText("registration complete");
       expect(bookings.confirm).toHaveBeenCalledWith({
         arid: "arid1",
-        sno: 1,
+        sno: [1],
         sp: "KTM",
         fp: "PKR",
       });
@@ -163,12 +184,71 @@ describe("BookingPage", () => {
     await user.click(screen.getByRole("button", { name: "On-hold" }));
 
     await screen.findByText("registration complete");
-    expect(bookings.pending).toHaveBeenCalledWith({
-      arid: "arid1",
-      sno: 1,
-      sp: "KTM",
-      fp: "PKR",
-    });
+expect(bookings.pending).toHaveBeenCalledWith({
+        arid: "arid1",
+        sno: [1],
+        sp: "KTM",
+        fp: "PKR",
+      });
     await waitFor(() => expect(bookings.confirm).not.toHaveBeenCalled());
   });
+
+  it("sends the picked bus-type as a filter on the search when toggled", async () => {
+    const user = userEvent.setup();
+    renderPage();
+
+    await fillSearchAndRun(user);
+
+    await waitFor(() => expect(bookings.search).toHaveBeenCalledTimes(1));
+    await user.click(screen.getAllByRole("checkbox")[0]);
+
+    await waitFor(() =>
+      expect(bookings.search).toHaveBeenLastCalledWith(
+        expect.objectContaining({ busType: ["bt1"] })
+      )
+    );
+  });
+
+  it(
+    "lets a logged-in user select multiple seats and book them together",
+    async () => {
+      const multiResult: BookingResult = {
+        ...result,
+        tickets: [
+          result.ticket,
+          { ...result.ticket, _id: "t2", sno: 2, blc: "B", sna: "2" },
+        ],
+        seats: [
+          result.seat,
+          { ...result.seat, _id: "s2", sno: 2 },
+        ],
+        ticket: result.ticket,
+        seat: result.seat,
+        price: 1000,
+      };
+      bookings.search.mockResolvedValue({ data: { offers: [offer2] } });
+      bookings.confirm.mockResolvedValue({ data: multiResult });
+
+      const user = userEvent.setup();
+      renderPage();
+
+      await fillSearchAndRun(user);
+
+      await user.click(screen.getByRole("button", { name: /B1/ }));
+      await screen.findByText("Confirm booking");
+
+      await user.click(screen.getByRole("button", { name: /B2/ }));
+
+      await user.click(screen.getByRole("button", { name: "Reserve" }));
+
+      await screen.findByText("registration complete");
+      expect(bookings.confirm).toHaveBeenCalledWith({
+        arid: "arid1",
+        sno: [1, 2],
+        sp: "KTM",
+        fp: "PKR",
+      });
+    },
+    15000
+  );
 });
