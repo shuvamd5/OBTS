@@ -165,9 +165,10 @@ describe("BookingPage", () => {
 
       await fillSearchAndRun(user);
       await pickSeat(user);
-      await fillPassenger(user);
 
       await user.click(screen.getByRole("button", { name: "Reserve" }));
+      await fillPassenger(user);
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
 
       await screen.findByText("registration complete");
       expect(bookings.confirm).toHaveBeenCalledWith({
@@ -189,9 +190,10 @@ describe("BookingPage", () => {
 
     await fillSearchAndRun(user);
     await pickSeat(user);
-    await fillPassenger(user);
 
     await user.click(screen.getByRole("button", { name: "On-hold" }));
+    await fillPassenger(user);
+    await user.click(screen.getByRole("button", { name: "Confirm" }));
 
     await screen.findByText("registration complete");
 expect(bookings.pending).toHaveBeenCalledWith({
@@ -275,9 +277,9 @@ expect(bookings.pending).toHaveBeenCalledWith({
 
       await user.click(screen.getByRole("button", { name: /B2/ }));
 
-      await fillPassenger(user);
-
       await user.click(screen.getByRole("button", { name: "Reserve" }));
+      await fillPassenger(user);
+      await user.click(screen.getByRole("button", { name: "Confirm" }));
 
       await screen.findByText("registration complete");
       expect(bookings.confirm).toHaveBeenCalledWith({

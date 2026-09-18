@@ -56,6 +56,8 @@ export default function BookingPage() {
   const [pickedSeats, setPickedSeats] = useState<OfferSeat[]>([]);
   const [expandedOffer, setExpandedOffer] = useState<BookingOffer | null>(null);
   const [booking, setBooking] = useState<BookingResult | null>(null);
+  const [bookingStep, setBookingStep] = useState<"seats" | "passenger">("seats");
+  const [pendingAction, setPendingAction] = useState<"pending" | "confirm">("confirm");
   const [actionError, setActionError] = useState("");
   const [passenger, setPassenger] = useState<{ name: string; age: string; gender: PassengerInput["gender"] }>(
     { name: "", age: "", gender: "Male" }
@@ -104,6 +106,8 @@ export default function BookingPage() {
     onError: (err) => setActionError(serializeError(err)),
     onSuccess: (res) => {
       setBooking(res.data);
+      setBookingStep("seats");
+      setPendingAction("confirm");
       void queryClient.invalidateQueries({ queryKey: ["offers"] });
     },
   });
@@ -130,6 +134,8 @@ export default function BookingPage() {
     setPickedSeats([]);
     setExpandedOffer(null);
     setBooking(null);
+    setBookingStep("seats");
+    setPendingAction("confirm");
     setActionError("");
   };
 
@@ -142,6 +148,8 @@ export default function BookingPage() {
       setPickedSeats([]);
       setExpandedOffer(null);
       setBooking(null);
+      setBookingStep("seats");
+      setPendingAction("confirm");
       setActionError("");
     }
   };
@@ -155,6 +163,8 @@ export default function BookingPage() {
     setPickedOffer(offer);
     setPickedSeats([]);
     setBooking(null);
+    setBookingStep("seats");
+    setPendingAction("confirm");
     setActionError("");
   };
 
@@ -176,17 +186,34 @@ export default function BookingPage() {
     if (!pickedOffer || pickedOffer.arid !== offer.arid) {
       setPickedOffer(offer);
       setPickedSeats([seat]);
+      setBookingStep("seats");
+      setPendingAction("confirm");
       return;
     }
-    setPickedSeats((prev) =>
-      prev.some((s) => s.sno === seat.sno) ? prev.filter((s) => s.sno !== seat.sno) : [...prev, seat]
-    );
+    const removed = pickedSeats.some((s) => s.sno === seat.sno);
+    const next = removed ? pickedSeats.filter((s) => s.sno !== seat.sno) : [...pickedSeats, seat];
+    setPickedSeats(next);
+    if (next.length === 0) setBookingStep("seats");
   };
+
+  const startConfirm = () => {
+    setPendingAction("confirm");
+    setBookingStep("passenger");
+  };
+
+  const startHold = () => {
+    setPendingAction("pending");
+    setBookingStep("passenger");
+  };
+
+  const backToSeats = () => setBookingStep("seats");
 
   const clearPicks = () => {
     setPickedOffer(null);
     setPickedSeats([]);
     setBooking(null);
+    setBookingStep("seats");
+    setPendingAction("confirm");
     setActionError("");
   };
 
@@ -497,8 +524,54 @@ export default function BookingPage() {
                           </p>
                         </div>
                       </div>
-                      <div className="min-h-[8rem] m-2">
-                        {pickedSeats.length > 0 ? (
+                      <div className="m-2 min-h-[8rem]">
+                        {bookingStep === "passenger" ? (
+                          <div className="mt-2 rounded-card border border-brand-200 bg-white p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                Passenger details
+                              </h4>
+                              <p className="text-[11px] font-semibold text-brand-700">
+                                {pickedSeats.length} seat{pickedSeats.length === 1 ? "" : "s"} selected
+                              </p>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-400">
+                              One passenger applies to all selected seats.
+                            </p>
+                            <div className="mt-2 grid grid-cols-[1fr_5rem_7rem] gap-2">
+                              <Input
+                                placeholder="Full name"
+                                value={passenger.name}
+                                maxLength={50}
+                                onChange={(e) => setPassenger({ ...passenger, name: e.target.value })}
+                                className="w-full px-2 py-1 text-sm"
+                              />
+                              <Input
+                                type="number"
+                                min={0}
+                                max={120}
+                                placeholder="Age"
+                                value={passenger.age}
+                                onChange={(e) => setPassenger({ ...passenger, age: e.target.value })}
+                                className="w-full px-2 py-1 text-sm"
+                              />
+                              <Select
+                                value={passenger.gender}
+                                onChange={(e) =>
+                                  setPassenger({
+                                    ...passenger,
+                                    gender: e.target.value as PassengerInput["gender"],
+                                  })
+                                }
+                                className="w-full px-2 py-1 text-sm"
+                              >
+                                <option value="Female">Female</option>
+                                <option value="Male">Male</option>
+                                <option value="Other">Other</option>
+                              </Select>
+                            </div>
+                          </div>
+                        ) : pickedSeats.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {pickedSeats.map((s) => (
                               <button
@@ -512,65 +585,42 @@ export default function BookingPage() {
                               </button>
                             ))}
                           </div>
-                        ) : <p className="mt-2 text-sm text-slate-500">Pick a seat from the map to proceed.</p>}
-                      </div>
-                      <div className="m-2 rounded-card border border-brand-200 bg-white p-3">
-                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                          Passenger details
-                        </h4>
-                        <p className="mt-0.5 text-[11px] text-slate-400">
-                          One passenger applies to all selected seats.
-                        </p>
-                        <div className="mt-2 grid grid-cols-[1fr_5rem_7rem] gap-2">
-                          <Input
-                            placeholder="Full name"
-                            value={passenger.name}
-                            maxLength={50}
-                            onChange={(e) => setPassenger({ ...passenger, name: e.target.value })}
-                            className="w-full px-2 py-1 text-sm"
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            max={120}
-                            placeholder="Age"
-                            value={passenger.age}
-                            onChange={(e) => setPassenger({ ...passenger, age: e.target.value })}
-                            className="w-full px-2 py-1 text-sm"
-                          />
-                          <Select
-                            value={passenger.gender}
-                            onChange={(e) =>
-                              setPassenger({
-                                ...passenger,
-                                gender: e.target.value as PassengerInput["gender"],
-                              })
-                            }
-                            className="w-full px-2 py-1 text-sm"
-                          >
-                            <option value="Female">Female</option>
-                            <option value="Male">Male</option>
-                            <option value="Other">Other</option>
-                          </Select>
-                        </div>
+                        ) : (
+                          <p className="mt-2 text-sm text-slate-500">
+                            Pick a seat from the map to proceed.
+                          </p>
+                        )}
                       </div>
                       <div className="mt-2 mb-2 flex flex-wrap items-center justify-end gap-2 border-t border-brand-200 pt-2">
-                        <Button
-                          disabled={busy || pickedSeats.length === 0 || !passengerValid}
-                          onClick={() => bookMutation.mutate("confirm")}
-                        >
-                          Reserve
-                        </Button>
-                        <Button
-                          variant="secondary"
-                          disabled={busy || pickedSeats.length === 0 || !passengerValid}
-                          onClick={() => bookMutation.mutate("pending")}
-                        >
-                          On-hold
-                        </Button>
-                        <Button variant="secondary" onClick={setPickedSeats.bind(null, [])}>
-                          <ChevronDownIcon className="h-4 w-4 rotate-180" /> Cancel
-                        </Button>
+                        {bookingStep === "passenger" ? (
+                          <>
+                            <Button variant="secondary" onClick={backToSeats} disabled={busy}>
+                              Edit seats
+                            </Button>
+                            <Button
+                              disabled={busy || pickedSeats.length === 0 || !passengerValid}
+                              onClick={() => bookMutation.mutate(pendingAction)}
+                            >
+                              Confirm
+                            </Button>
+                          </>
+                        ) : (
+                          <>
+                            <Button disabled={busy || pickedSeats.length === 0} onClick={startConfirm}>
+                              Reserve
+                            </Button>
+                            <Button
+                              variant="secondary"
+                              disabled={busy || pickedSeats.length === 0}
+                              onClick={startHold}
+                            >
+                              On-hold
+                            </Button>
+                            <Button variant="secondary" onClick={setPickedSeats.bind(null, [])}>
+                              <ChevronDownIcon className="h-4 w-4 rotate-180" /> Cancel
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   )}
