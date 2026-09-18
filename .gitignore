@@ -21,4 +21,5 @@ Thumbs.db
 # personal local-only files (keep on machine, never push)
 PROGRESS.md
 README.md
+AGENTS.md
 #end
