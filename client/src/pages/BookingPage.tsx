@@ -212,13 +212,13 @@ export default function BookingPage() {
 
   const backToSeats = () => setBookingStep("seats");
 
-  const clearPicks = () => {
-    setPickedOffer(null);
-    setPickedSeats([]);
+  const backFromReceipt = () => {
     setBooking(null);
+    setPickedSeats([]);
     setBookingStep("seats");
     setPendingAction("confirm");
     setActionError("");
+    void queryClient.invalidateQueries({ queryKey: ["offers"] });
   };
 
   const offers: BookingOffer[] | null = searchQuery.data ?? null;
@@ -338,7 +338,7 @@ export default function BookingPage() {
 
       {booking && pickedOffer && (
         <div className={searchActive ? "flex-1 overflow-y-auto p-4" : "mt-6"}>
-          <TicketDisplay result={booking} offer={pickedOffer} onBack={clearPicks} />
+          <TicketDisplay result={booking} offer={pickedOffer} onBack={backFromReceipt} />
         </div>
       )}
 

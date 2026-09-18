@@ -290,6 +290,11 @@ expect(bookings.pending).toHaveBeenCalledWith({
         fp: "PKR",
         passenger: passengerPayload,
       });
+
+      await user.click(screen.getByRole("button", { name: /Back/ }));
+      expect(await screen.findByText("Confirm booking")).toBeInTheDocument();
+      expect(screen.getByText("Pick a seat from the map to proceed.")).toBeInTheDocument();
+      await waitFor(() => expect(bookings.search).toHaveBeenCalledTimes(3));
     },
     15000
   );
