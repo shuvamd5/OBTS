@@ -7,7 +7,7 @@ import { serializeError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { todayPlusDays, fmtDate } from "../lib/date";
 import type { BookingOffer, BookingResult, OfferSeat, PassengerInput } from "../types";
-import { BusIcon, ChevronDownIcon, DashboardIcon, SearchIcon } from "../components/icons";
+import { BusIcon, ClearIcon, DashboardIcon, SearchIcon } from "../components/icons";
 import OfferCard from "../components/booking/OfferCard";
 import TicketDisplay from "../components/booking/TicketDisplay";
 import { Legend, SeatMap } from "../components/booking/SeatMap";
@@ -628,18 +628,25 @@ export default function BookingPage() {
                           </>
                         ) : (
                           <>
-                            <Button disabled={busy || pickedSeats.length === 0} onClick={startConfirm}>
+                            <Button size="sm" disabled={busy || pickedSeats.length === 0} onClick={startConfirm}>
                               Reserve
                             </Button>
                             <Button
+                              size="sm"
                               variant="secondary"
                               disabled={busy || pickedSeats.length === 0}
                               onClick={startHold}
                             >
                               On-hold
                             </Button>
-                            <Button variant="secondary" onClick={setPickedSeats.bind(null, [])}>
-                              <ChevronDownIcon className="h-4 w-4 rotate-180" /> Cancel
+                            <Button
+                              size="icon"
+                              variant="secondary"
+                              aria-label="Clear seats"
+                              title="Clear Seats"
+                              onClick={setPickedSeats.bind(null, [])}
+                            >
+                              <ClearIcon className="h-4 w-4" />
                             </Button>
                           </>
                         )}
