@@ -28,7 +28,7 @@ const day = (n) => {
   ).padStart(2, '0')}`;
 };
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
-const pax = { passenger: { name: 'Book User', age: 30, gender: 'Female' } };
+const pax = { passenger: { name: 'Book User', phone: '9800000000', age: 30, gender: 'Female' } };
 
 const ensureType = async () => {
   const bt = await BusType.create({ name: `T37_${uniq}`, seatCount: 37, seatStyle: 'luxury' });
@@ -212,10 +212,36 @@ try {
       sno: 30,
       sp: 'Butwal',
       fp: 'Pokhara',
-      passenger: { name: 'X', age: 200, gender: 'Female' },
+      passenger: { name: 'X', phone: '9800000000', age: 200, gender: 'Female' },
     });
   assert.equal(r.status, 400);
   ok('booking with invalid passenger age -> 400');
+
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({
+      arid: price._id,
+      sno: 30,
+      sp: 'Butwal',
+      fp: 'Pokhara',
+      passenger: { name: 'X', age: 30, gender: 'Female' },
+    });
+  assert.equal(r.status, 400);
+  ok('booking without passenger phone -> 400');
+
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({
+      arid: price._id,
+      sno: 30,
+      sp: 'Butwal',
+      fp: 'Pokhara',
+      passenger: { name: 'X', phone: '12345', age: 30, gender: 'Female' },
+    });
+  assert.equal(r.status, 400);
+  ok('booking with invalid passenger phone -> 400');
 
   // ---- pending booking + ledger ----
   r = await request(app)
@@ -227,6 +253,7 @@ try {
   assert.equal(r.body.seat.status, 'held');
   assert.equal(r.body.seat.price, 1000);
   assert.equal(r.body.ticket.passengerName, 'Book User');
+  assert.equal(r.body.ticket.passengerPhone, '9800000000');
   assert.equal(r.body.ticket.passengerAge, 30);
   assert.equal(r.body.ticket.passengerGender, 'Female');
   assert.ok(r.body.bookingRef, 'bookingRef returned');
@@ -448,6 +475,7 @@ try {
   assert.equal(String(r.body.tickets[0].bookingRef), String(r.body.bookingRef));
   assert.equal(String(r.body.tickets[1].bookingRef), String(r.body.bookingRef));
   assert.equal(r.body.tickets[1].passengerName, 'Book User');
+  assert.equal(r.body.tickets[1].passengerPhone, '9800000000');
   uL = await User.findById(userB._id).lean();
   assert.equal(uL.totaltc, 6);
   assert.equal(uL.pendingtc, 5);
@@ -592,6 +620,7 @@ try {
   assert.ok(withRows, 'admin passengers includes ticket rows');
   const paxRow = withRows.tickets.find((t) => t.passengerName);
   assert.ok(paxRow, 'passenger row carries name');
+  assert.equal(paxRow.passengerPhone, '9800000000');
   assert.equal(paxRow.bus.bname, 'Book Bus');
   ok('admin passengers lists schedules with passenger rows');
 

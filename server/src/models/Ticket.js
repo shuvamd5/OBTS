@@ -19,6 +19,7 @@ const ticketSchema = new mongoose.Schema(
     pyreby: { type: String, default: 'none' },
     bookingRef: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     passengerName: { type: String, default: '' },
+    passengerPhone: { type: String, default: '', trim: true },
     passengerAge: { type: Number, default: null, min: 0, max: 120 },
     passengerGender: { type: String, enum: ['Female', 'Male', 'Other', ''], default: '' },
   },

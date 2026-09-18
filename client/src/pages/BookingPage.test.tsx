@@ -127,10 +127,11 @@ async function pickSeat(user: ReturnType<typeof userEvent.setup>) {
 
 async function fillPassenger(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByPlaceholderText("Full name"), "Ram Bahadur");
+  await user.type(screen.getByPlaceholderText("Phone (10 digits)"), "9800000000");
   await user.type(screen.getByPlaceholderText("Age"), "30");
 }
 
-const passengerPayload = { name: "Ram Bahadur", age: 30, gender: "Male" };
+const passengerPayload = { name: "Ram Bahadur", phone: "9800000000", age: 30, gender: "Male" };
 
 const offer2: BookingOffer = {
   ...offer,

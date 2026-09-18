@@ -193,6 +193,11 @@ function BookingCard({
           <div className="font-medium text-slate-800">
             {booking.tickets[0]?.passengerName || "—"}
             {booking.tickets[0]?.passengerAge != null ? ` (${booking.tickets[0].passengerAge})` : ""}
+            {booking.tickets[0]?.passengerPhone ? (
+              <span className="ml-1 font-normal text-slate-400">
+                · {booking.tickets[0].passengerPhone}
+              </span>
+            ) : null}
           </div>
         </div>
         <div>
@@ -212,7 +217,10 @@ function BookingCard({
               {seat.blc}
               {seat.sna}
             </span>
-            <span className="flex-1 text-slate-500">{seat.passengerName || "—"}</span>
+            <span className="flex-1 text-slate-500">
+              {seat.passengerName || "—"}
+              {seat.passengerPhone ? <span> · {seat.passengerPhone}</span> : null}
+            </span>
             <span className="text-slate-700">Rs {seat.price}</span>
             {!cancelled && (
               <button

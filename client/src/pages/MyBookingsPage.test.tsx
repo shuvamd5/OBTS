@@ -37,6 +37,7 @@ const ticket = (over: Partial<MyBookingTicket> = {}): MyBookingTicket => ({
   pyreby: "none",
   bookingRef: "ref-res",
   passengerName: "Ram Bahadur",
+  passengerPhone: "9800000000",
   passengerAge: 30,
   passengerGender: "Male",
   bus: { _id: "b1", bname: "Express Queen", plateNumber: "BA 1 JA 2345", busTypeName: "Volvo" },
@@ -94,6 +95,7 @@ describe("MyBookingsPage", () => {
     await screen.findByText("My Bookings");
     expect(await screen.findByText("Express Queen · BA 1 JA 2345")).toBeInTheDocument();
     expect(screen.getByText("Ram Bahadur")).toBeInTheDocument();
+    expect(screen.getAllByText("· 9800000000").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Rs 500").length).toBeGreaterThan(0);
 
     await user.click(screen.getByRole("button", { name: /^Reserved/ }));

@@ -38,6 +38,7 @@ export const bookingSearchSchema = z
 
 const passengerSchema = z.object({
   name: z.string().trim().min(1, 'passenger name is required').max(50),
+  phone: z.string().trim().regex(/^\d{10}$/, 'phone must be exactly 10 digits'),
   age: z.coerce.number().int().min(0, 'age must be 0-120').max(120, 'age must be 0-120'),
   gender: z.enum(['Female', 'Male', 'Other']),
 });

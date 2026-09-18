@@ -198,6 +198,7 @@ export interface BookingTicket {
   pyreby: string;
   bookingRef?: string | null;
   passengerName?: string;
+  passengerPhone?: string;
   passengerAge?: number | null;
   passengerGender?: string;
 }
@@ -233,6 +234,7 @@ export interface BookingResult {
 
 export interface PassengerInput {
   name: string;
+  phone: string;
   age: number;
   gender: "Female" | "Male" | "Other";
 }
@@ -258,7 +260,7 @@ export interface MyBooking {
   trtime: string;
   bus: { bid: string; bname: string; plateNumber: string; busTypeName: string | null } | null;
   route: { rid: string; sp: string; fp: string } | null;
-  seats: { sno: number; blc: string; sna: string; price: number; ticketId: string; passengerName: string }[];
+  seats: { sno: number; blc: string; sna: string; price: number; ticketId: string; passengerName: string; passengerPhone?: string }[];
   totalPrice: number;
   status: TicketStatus;
   payment: "Clear" | "due";

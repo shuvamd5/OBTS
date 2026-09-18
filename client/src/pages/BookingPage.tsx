@@ -59,9 +59,12 @@ export default function BookingPage() {
   const [bookingStep, setBookingStep] = useState<"seats" | "passenger">("seats");
   const [pendingAction, setPendingAction] = useState<"pending" | "confirm">("confirm");
   const [actionError, setActionError] = useState("");
-  const [passenger, setPassenger] = useState<{ name: string; age: string; gender: PassengerInput["gender"] }>(
-    { name: "", age: "", gender: "Male" }
-  );
+  const [passenger, setPassenger] = useState<{
+    name: string;
+    phone: string;
+    age: string;
+    gender: PassengerInput["gender"];
+  }>({ name: "", phone: "", age: "", gender: "Male" });
 
   const locationsQuery = useQuery({
     queryKey: ["locations"],
@@ -84,7 +87,7 @@ export default function BookingPage() {
   const bookMutation = useMutation({
     mutationFn: (action: "pending" | "confirm") => {
       if (!pickedOffer || pickedSeats.length === 0) throw new Error("No seat picked");
-      if (!passenger.name.trim() || passenger.age === "") {
+      if (!passenger.name.trim() || passenger.age === "" || !/^\d{10}$/.test(passenger.phone.trim())) {
         throw new Error("Passenger details are required");
       }
       const payload = {
@@ -94,6 +97,7 @@ export default function BookingPage() {
         fp: pickedOffer.query.fp,
         passenger: {
           name: passenger.name.trim(),
+          phone: passenger.phone.trim(),
           age: Number(passenger.age),
           gender: passenger.gender,
         },
@@ -222,6 +226,8 @@ export default function BookingPage() {
   const busy = bookMutation.isPending;
   const passengerValid =
     passenger.name.trim().length > 0 &&
+    passenger.phone.trim().length === 10 &&
+    /^\d{10}$/.test(passenger.phone.trim()) &&
     passenger.age !== "" &&
     Number.isInteger(Number(passenger.age)) &&
     Number(passenger.age) >= 0 &&
@@ -538,7 +544,7 @@ export default function BookingPage() {
                             <p className="mt-0.5 text-[11px] text-slate-400">
                               One passenger applies to all selected seats.
                             </p>
-                            <div className="mt-2 grid grid-cols-[1fr_5rem_7rem] gap-2">
+                            <div className="mt-2 grid grid-cols-[1fr_5rem] gap-2">
                               <Input
                                 placeholder="Full name"
                                 value={passenger.name}
@@ -553,6 +559,22 @@ export default function BookingPage() {
                                 placeholder="Age"
                                 value={passenger.age}
                                 onChange={(e) => setPassenger({ ...passenger, age: e.target.value })}
+                                className="w-full px-2 py-1 text-sm"
+                              />
+                            </div>
+                            <div className="mt-2 grid grid-cols-[1fr_7rem] gap-2">
+                              <Input
+                                type="tel"
+                                inputMode="numeric"
+                                maxLength={10}
+                                placeholder="Phone (10 digits)"
+                                value={passenger.phone}
+                                onChange={(e) =>
+                                  setPassenger({
+                                    ...passenger,
+                                    phone: e.target.value.replace(/\D/g, "").slice(0, 10),
+                                  })
+                                }
                                 className="w-full px-2 py-1 text-sm"
                               />
                               <Select

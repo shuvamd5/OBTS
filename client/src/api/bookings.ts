@@ -71,6 +71,7 @@ export interface PassengerTicket {
   tstatus: string;
   payment: string;
   passengerName: string;
+  passengerPhone: string;
   passengerAge: number | null;
   passengerGender: string;
   bus: { _id: string; bname: string; plateNumber: string } | null;
