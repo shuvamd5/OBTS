@@ -25,15 +25,19 @@ export default function BusesPage() {
     enabled: staff,
   });
 
-  const patch = (bus: Bus) =>
+  const patch = (bus: Bus) => {
     queryClient.setQueryData<Bus[]>(["buses"], (prev) => {
       const list = prev ?? [];
       const exists = list.some((x) => x._id === bus._id);
       return exists ? list.map((x) => (x._id === bus._id ? bus : x)) : [bus, ...list];
     });
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
+  };
 
-  const remove = (id: string) =>
+  const remove = (id: string) => {
     queryClient.setQueryData<Bus[]>(["buses"], (prev) => (prev ?? []).filter((x) => x._id !== id));
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
+  };
 
   const error = busesQuery.isError ? serializeError(busesQuery.error) : "";
   const buses = busesQuery.data ?? [];

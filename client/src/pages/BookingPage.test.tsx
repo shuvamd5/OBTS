@@ -220,6 +220,31 @@ expect(bookings.pending).toHaveBeenCalledWith({
     );
   });
 
+  it("keeps the filter panel and previous results visible while a filter refetch is in flight", async () => {
+    let releaseSecond: ((value: { data: { offers: BookingOffer[] } }) => void) | undefined;
+    bookings.search
+      .mockResolvedValueOnce({ data: { offers: [offer] } })
+      .mockImplementationOnce(
+        () =>
+          new Promise<{ data: { offers: BookingOffer[] } }>((resolve) => {
+            releaseSecond = resolve;
+          })
+      );
+
+    const user = userEvent.setup();
+    renderPage();
+
+    await fillSearchAndRun(user);
+    await user.click(screen.getAllByRole("checkbox")[0]);
+
+    await screen.findByText(/Updating/);
+    expect(screen.getByText("Filters")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Express Queen/ })).toBeInTheDocument();
+
+    releaseSecond?.({ data: { offers: [offer] } });
+    await waitFor(() => expect(bookings.search).toHaveBeenCalledTimes(2));
+  });
+
   it(
     "lets a logged-in user select multiple seats and book them together",
     async () => {

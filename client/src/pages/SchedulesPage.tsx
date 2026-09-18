@@ -41,15 +41,19 @@ export default function SchedulesPage() {
     [schedulesQuery.data]
   );
 
-  const patch = (next: Schedule) =>
+  const patch = (next: Schedule) => {
     queryClient.setQueryData<Schedule[]>(["schedules"], (prev) => {
       const list = prev ?? [];
       const exists = list.some((x) => x._id === next._id);
       return exists ? list.map((x) => (x._id === next._id ? next : x)) : [next, ...list];
     });
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
+  };
 
-  const remove = (id: string) =>
+  const remove = (id: string) => {
     queryClient.setQueryData<Schedule[]>(["schedules"], (prev) => (prev ?? []).filter((x) => x._id !== id));
+    void queryClient.invalidateQueries({ queryKey: ["stats"] });
+  };
 
   if (!staff) return <UserView schedules={byDate} loading={loading} error={error} />;
 
@@ -83,7 +87,10 @@ export default function SchedulesPage() {
                   routes={routesQuery.data ?? []}
                   onUpdate={patch}
                   onDeleted={() => remove(s._id)}
-                  onPriceChanged={() => void queryClient.invalidateQueries({ queryKey: ["schedules"] })}
+                  onPriceChanged={() => {
+                    void queryClient.invalidateQueries({ queryKey: ["schedules"] });
+                    void queryClient.invalidateQueries({ queryKey: ["stats"] });
+                  }}
                 />
               ))}
             </div>

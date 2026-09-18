@@ -76,6 +76,7 @@ export default function BookingPage() {
     queryKey: ["offers", query],
     queryFn: () => bookingsApi.search(query!).then((res) => res.data.offers),
     enabled: Boolean(query),
+    placeholderData: (previousData) => previousData,
   });
 
   const bookMutation = useMutation({
@@ -302,25 +303,13 @@ export default function BookingPage() {
         </p>
       )}
 
-      {loading && (
-        <p
-          className={
-            searchActive
-              ? "flex flex-1 items-center justify-center text-sm text-slate-400"
-              : "mt-6 text-sm text-slate-400"
-          }
-        >
-          Searching for buses…
-        </p>
-      )}
-
       {booking && pickedOffer && (
         <div className={searchActive ? "flex-1 overflow-y-auto p-4" : "mt-6"}>
           <TicketDisplay result={booking} offer={pickedOffer} onBack={clearPicks} />
         </div>
       )}
 
-      {searchActive && !loading && !booking && offers && (
+      {searchActive && !booking && (
         <div className="flex min-h-0 flex-1">
           <Card pad="4" className="w-56 shrink-0 overflow-y-auto">
             <div className="flex items-center justify-between">
@@ -448,7 +437,12 @@ export default function BookingPage() {
           </Card>
 
           <div className="flex ml-4 mt-4 min-w-0 flex-1 flex-col overflow-y-auto">
-            {expandedOffer && (
+            {loading && !offers && (
+              <p className="flex flex-1 items-center justify-center text-sm text-slate-400">
+                Searching for buses…
+              </p>
+            )}
+            {offers && expandedOffer && (
               <div className="sticky top-0 z-10 m-auto rounded-card border border-brand-200 bg-white p-4 min-h-[22rem]">
                 <div className="flex flex-wrap items-center justify-between gap-3 ">
                   <div className="flex items-center justify-between gap-10 ">
@@ -583,7 +577,7 @@ export default function BookingPage() {
                 </div>
               </div>
             )}
-            {!expandedOffer && (
+            {offers && !expandedOffer && (
               <div>
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex items-center gap-2 text-sm text-slate-500">
@@ -591,6 +585,7 @@ export default function BookingPage() {
                     {offers.length === 0
                       ? "Sorry, no bus found for the given route and date."
                       : `${offers.length} bus${offers.length > 1 ? "es" : ""} found`}
+                    {loading && <span className="text-slate-400">· Updating…</span>}
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     <span className="text-slate-500">Order by</span>
