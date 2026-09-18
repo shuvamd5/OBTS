@@ -14,8 +14,15 @@ export default function TicketDisplay({
 }) {
   const tickets = result.tickets ?? [result.ticket];
   const seatsLabel = tickets.map((t) => `${t.blc}${t.sna}`).join(", ");
+  const statusLabel =
+    result.ticket.tstatus === "reserved"
+      ? "Reserved"
+      : result.ticket.tstatus === "cancelled"
+        ? "Cancelled"
+        : "On-hold";
   const rows: [string, string][] = [
     ["Name", result.ticket.treby],
+    ["Ticket code", result.ticket._id],
     ["Bus name", result.bus.bname],
     ["Plate number", result.bus.plateNumber],
     ["Bus type", result.bus.busType?.name ?? "—"],
@@ -23,7 +30,7 @@ export default function TicketDisplay({
     ["date and time", `${fmtDate(offer.trdate)} ${offer.trtime}`],
     ["Seats", seatsLabel],
     ["Total price", `Rs ${result.price}`],
-    ["Seat status", result.ticket.tstatus === "R" ? "Reserved" : "Pending"],
+    ["Seat status", statusLabel],
     ["Payment", result.ticket.payment],
   ];
   return (

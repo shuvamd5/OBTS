@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 
-export const TICKET_STATUSES = ['E', 'P', 'R'];
+export const TICKET_STATUSES = ['held', 'reserved', 'cancelled'];
 
 const ticketSchema = new mongoose.Schema(
   {
@@ -17,6 +17,10 @@ const ticketSchema = new mongoose.Schema(
     tstatus: { type: String, enum: TICKET_STATUSES, required: true },
     payment: { type: String, default: 'due' },
     pyreby: { type: String, default: 'none' },
+    bookingRef: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+    passengerName: { type: String, default: '' },
+    passengerAge: { type: Number, default: null, min: 0, max: 120 },
+    passengerGender: { type: String, enum: ['Female', 'Male', 'Other', ''], default: '' },
   },
   { timestamps: true }
 );

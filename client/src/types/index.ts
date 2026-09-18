@@ -140,7 +140,7 @@ export interface AppStats {
 }
 
 export type SeatStatus = "available" | "held" | "reserved";
-export type TicketStatus = "E" | "P" | "R";
+export type TicketStatus = "held" | "reserved" | "cancelled";
 
 export interface OfferSeat {
   sno: number;
@@ -196,6 +196,10 @@ export interface BookingTicket {
   tstatus: TicketStatus;
   payment: string;
   pyreby: string;
+  bookingRef?: string | null;
+  passengerName?: string;
+  passengerAge?: number | null;
+  passengerGender?: string;
 }
 
 export interface BookingSeat {
@@ -223,4 +227,40 @@ export interface BookingResult {
     amenities: string[];
   };
   price: number;
+  bookingRef?: string;
+  passenger?: PassengerInput;
+}
+
+export interface PassengerInput {
+  name: string;
+  age: number;
+  gender: "Female" | "Male" | "Other";
+}
+
+export interface BookingPayload {
+  arid: string;
+  sno: number[];
+  sp: string;
+  fp: string;
+  passenger: PassengerInput;
+}
+
+export interface MyBookingTicket extends BookingTicket {
+  bus: { _id: string; bname: string; plateNumber: string; busTypeName: string | null } | null;
+  route: { rid: string; sp: string; fp: string } | null;
+  segment: { sp: string; fp: string; price: number } | null;
+}
+
+export interface MyBooking {
+  bookingRef: string;
+  arid: string;
+  trdate: string;
+  trtime: string;
+  bus: { bid: string; bname: string; plateNumber: string; busTypeName: string | null } | null;
+  route: { rid: string; sp: string; fp: string } | null;
+  seats: { sno: number; blc: string; sna: string; price: number; ticketId: string; passengerName: string }[];
+  totalPrice: number;
+  status: TicketStatus;
+  payment: "Clear" | "due";
+  tickets: MyBookingTicket[];
 }

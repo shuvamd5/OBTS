@@ -28,6 +28,7 @@ const day = (n) => {
   ).padStart(2, '0')}`;
 };
 const auth = (t) => ({ Authorization: `Bearer ${t}` });
+const pax = { passenger: { name: 'Book User', age: 30, gender: 'Female' } };
 
 const ensureType = async () => {
   const bt = await BusType.create({ name: `T37_${uniq}`, seatCount: 37, seatStyle: 'luxury' });
@@ -194,15 +195,42 @@ try {
   assert.equal(r.status, 401);
   ok('guest pending -> 401');
 
+  // ---- passenger validation ----
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({ arid: price._id, sno: 30, sp: 'Butwal', fp: 'Pokhara' });
+  assert.equal(r.status, 400);
+  assert.equal(r.body.message, 'Validation failed');
+  ok('booking without passenger -> 400');
+
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(userToken))
+    .send({
+      arid: price._id,
+      sno: 30,
+      sp: 'Butwal',
+      fp: 'Pokhara',
+      passenger: { name: 'X', age: 200, gender: 'Female' },
+    });
+  assert.equal(r.status, 400);
+  ok('booking with invalid passenger age -> 400');
+
   // ---- pending booking + ledger ----
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.message, 'registration complete');
   assert.equal(r.body.seat.status, 'held');
   assert.equal(r.body.seat.price, 1000);
+  assert.equal(r.body.ticket.passengerName, 'Book User');
+  assert.equal(r.body.ticket.passengerAge, 30);
+  assert.equal(r.body.ticket.passengerGender, 'Female');
+  assert.ok(r.body.bookingRef, 'bookingRef returned');
+  assert.equal(String(r.body.ticket.bookingRef), String(r.body.bookingRef));
   const uLedger = await User.findById(userB._id).lean();
   assert.equal(uLedger.totaltc, 1);
   assert.equal(uLedger.pendingtc, 1);
@@ -225,7 +253,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 409);
   assert.equal(r.body.message, 'the selected seat is on-hold');
   ok('duplicate exact segment -> 409 on-hold');
@@ -234,7 +262,7 @@ try {
   r = await request(app)
     .post('/api/bookings/confirm')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 409);
   assert.equal(r.body.message, 'the selected seat is kept on-hold');
   ok('confirm on P seat -> 409 on-hold');
@@ -243,7 +271,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Bhaktapur' });
+    .send({ arid: price._id, sno: 3, sp: 'Butwal', fp: 'Bhaktapur', ...pax });
   assert.equal(r.status, 409);
   assert.equal(r.body.message, 'the selected seat is on-hold');
   ok('overlapping sub-segment same sno -> 409 on-hold');
@@ -252,7 +280,7 @@ try {
   r = await request(app)
     .post('/api/bookings/confirm')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 19, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 19, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.seat.status, 'reserved');
   const uLedger2 = await User.findById(userB._id).lean();
@@ -284,7 +312,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 19, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 19, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 409);
   assert.equal(r.body.message, 'the selected seat has been reserved');
   ok('pending on R seat -> 409 reserved');
@@ -293,12 +321,12 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 20, sp: 'Butwal', fp: 'Bhaktapur' });
+    .send({ arid: price._id, sno: 20, sp: 'Butwal', fp: 'Bhaktapur', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 20, sp: 'Bhaktapur', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 20, sp: 'Bhaktapur', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   const uLedger3 = await User.findById(userB._id).lean();
   assert.equal(uLedger3.totaltc, 4);
@@ -312,7 +340,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 999, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 999, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 400);
   assert.equal(r.body.message, 'Invalid seat number');
   ok('invalid sno -> 400');
@@ -321,7 +349,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 2, sp: 'Pokhara', fp: 'Butwal' });
+    .send({ arid: price._id, sno: 2, sp: 'Pokhara', fp: 'Butwal', ...pax });
   assert.equal(r.status, 400);
   assert.equal(r.body.message, 'Invalid travel segment');
   ok('reverse segment booking -> 400');
@@ -389,7 +417,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: 7, sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: 7, sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   let uL = await User.findById(userB._id).lean();
   assert.equal(uL.totaltc, 5);
@@ -409,13 +437,17 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: [8, 9], sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: [8, 9], sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.tickets.length, 2);
   assert.equal(r.body.seats.length, 2);
   assert.equal(String(r.body.ticket._id), String(r.body.tickets[0]._id));
   assert.equal(r.body.seat.sno, 8);
   assert.equal(r.body.price, 2000);
+  assert.ok(r.body.bookingRef, 'multi-seat bookingRef');
+  assert.equal(String(r.body.tickets[0].bookingRef), String(r.body.bookingRef));
+  assert.equal(String(r.body.tickets[1].bookingRef), String(r.body.bookingRef));
+  assert.equal(r.body.tickets[1].passengerName, 'Book User');
   uL = await User.findById(userB._id).lean();
   assert.equal(uL.totaltc, 6);
   assert.equal(uL.pendingtc, 5);
@@ -428,7 +460,7 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: [10, 10], sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: [10, 10], sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 201, JSON.stringify(r.body));
   assert.equal(r.body.tickets.length, 1);
   uL = await User.findById(userB._id).lean();
@@ -440,10 +472,136 @@ try {
   r = await request(app)
     .post('/api/bookings/pending')
     .set(auth(userToken))
-    .send({ arid: price._id, sno: [3, 999], sp: 'Butwal', fp: 'Pokhara' });
+    .send({ arid: price._id, sno: [3, 999], sp: 'Butwal', fp: 'Pokhara', ...pax });
   assert.equal(r.status, 400);
   assert.equal(r.body.message, 'Invalid seat number');
   ok('array with invalid sno -> 400');
+
+  // ---- F29/F30 my bookings + detail + F31/F27 cancel ----
+  const userC = await register('MyBookUser', 'Male');
+  const userCToken = (await login(userC.uemail, 'Test@1234')).accessToken;
+
+  let mc = await request(app)
+    .post('/api/bookings/confirm')
+    .set(auth(userCToken))
+    .send({ arid: price._id, sno: [21, 22], sp: 'Butwal', fp: 'Pokhara', ...pax });
+  assert.equal(mc.status, 201, JSON.stringify(mc.body));
+  const cRef = String(mc.body.bookingRef);
+  const cSeat1 = String(mc.body.seats[0]._id);
+  const cSeat2 = String(mc.body.seats[1]._id);
+  const cTicket1 = String(mc.body.tickets[0]._id);
+  const cTicket2 = String(mc.body.tickets[1]._id);
+
+  r = await request(app).get('/api/bookings/my');
+  assert.equal(r.status, 401);
+  ok('guest my-bookings -> 401');
+
+  r = await request(app).get('/api/bookings/my').set(auth(userCToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.bookings.length, 1);
+  const mine = r.body.bookings[0];
+  assert.equal(mine.bookingRef, cRef);
+  assert.equal(mine.status, 'reserved');
+  assert.equal(mine.payment, 'due');
+  assert.equal(mine.seats.length, 2);
+  assert.equal(mine.totalPrice, 2000);
+  assert.ok(mine.bus && mine.bus.bname, 'booking enriched with bus');
+  assert.equal(mine.route.fp, 'Pokhara');
+  ok('my-bookings groups multi-seat booking with bus/route + total');
+
+  r = await request(app).get(`/api/bookings/${cRef}`).set(auth(userCToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.booking.bookingRef, cRef);
+  assert.equal(r.body.booking.tickets.length, 2);
+  ok('booking detail by ref -> owner sees group');
+
+  r = await request(app).get(`/api/bookings/${cRef}`).set(auth(userToken));
+  assert.equal(r.status, 404);
+  ok('booking detail by other user -> 404');
+
+  r = await request(app).get('/api/bookings/not-an-id').set(auth(userCToken));
+  assert.equal(r.status, 400);
+  ok('booking detail bad id -> 400');
+
+  // individual cancel: releases one seat + reverses one ticket of the ledger
+  let cBefore = await User.findById(userC._id).lean();
+  r = await request(app)
+    .patch(`/api/bookings/tickets/${cTicket1}/cancel`)
+    .set(auth(userCToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.message, 'Ticket cancelled');
+  let cAfter = await User.findById(userC._id).lean();
+  assert.equal(cAfter.totaltc, cBefore.totaltc - 1);
+  assert.equal(cAfter.reservedtc, cBefore.reservedtc - 1);
+  assert.equal(cAfter.due, cBefore.due - 1000);
+  assert.equal(cAfter.points, cBefore.points - 1);
+  assert.equal(await Seat.countDocuments({ _id: cSeat1 }), 0, 'cancelled seat released');
+  assert.equal((await Ticket.findById(cTicket1)).tstatus, 'cancelled');
+  ok('individual cancel reverses ledger + releases seat');
+
+  r = await request(app).get(`/api/bookings/search?sp=Butwal&fp=Pokhara&date=${day(8)}`);
+  assert.equal(r.body.offers[0].seats.find((s) => s.sno === 21).status, 'available');
+  ok('cancelled seat shows available on re-search');
+
+  r = await request(app)
+    .patch(`/api/bookings/tickets/${cTicket1}/cancel`)
+    .set(auth(userCToken));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.message, 'No change');
+  ok('double individual cancel -> No change');
+
+  r = await request(app)
+    .patch(`/api/bookings/tickets/${cTicket2}/cancel`)
+    .set(auth(userToken));
+  assert.equal(r.status, 403);
+  ok('cancel another user ticket -> 403');
+
+  // group cancel: cancels the remaining seat
+  cBefore = await User.findById(userC._id).lean();
+  r = await request(app).patch(`/api/bookings/${cRef}/cancel`).set(auth(userCToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.message, 'Booking cancelled');
+  cAfter = await User.findById(userC._id).lean();
+  assert.equal(cAfter.totaltc, cBefore.totaltc - 1);
+  assert.equal(cAfter.reservedtc, cBefore.reservedtc - 1);
+  assert.equal(cAfter.due, cBefore.due - 1000);
+  assert.equal(cAfter.points, cBefore.points - 1);
+  assert.equal(await Seat.countDocuments({ _id: cSeat2 }), 0, 'group cancel releases seat');
+  ok('group cancel reverses remaining ledger + releases seat');
+
+  r = await request(app).get('/api/bookings/my').set(auth(userCToken));
+  assert.equal(r.body.bookings[0].status, 'cancelled');
+  ok('cancelled booking surfaces in my-bookings');
+
+  r = await request(app).patch(`/api/bookings/${cRef}/cancel`).set(auth(userToken));
+  assert.equal(r.status, 404);
+  ok('cancel another user booking -> 404');
+
+  // ---- F32 staff passengers list ----
+  r = await request(app).get('/api/bookings/passengers');
+  assert.equal(r.status, 401);
+  ok('guest passengers -> 401');
+
+  r = await request(app).get('/api/bookings/passengers').set(auth(userToken));
+  assert.equal(r.status, 403);
+  ok('customer passengers -> 403');
+
+  r = await request(app).get('/api/bookings/passengers').set(auth(adminToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const withRows = r.body.schedules.find((s) => s.tickets.length > 0);
+  assert.ok(withRows, 'admin passengers includes ticket rows');
+  const paxRow = withRows.tickets.find((t) => t.passengerName);
+  assert.ok(paxRow, 'passenger row carries name');
+  assert.equal(paxRow.bus.bname, 'Book Bus');
+  ok('admin passengers lists schedules with passenger rows');
+
+  const opUser = await register('OpUser', 'Male');
+  await User.updateOne({ _id: opUser._id }, { ustatus: 'operator' });
+  const opToken = (await login(opUser.uemail, 'Test@1234')).accessToken;
+  r = await request(app).get('/api/bookings/passengers').set(auth(opToken));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.schedules.length, 0);
+  ok('operator with no buses -> scoped empty passengers');
 
   // ---- schedule delete = soft delete: seats + tickets retained ----
   r = await request(app).delete(`/api/schedules/${sched._id}`).set(auth(adminToken));

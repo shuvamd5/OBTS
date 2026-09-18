@@ -36,6 +36,12 @@ export const bookingSearchSchema = z
     path: ['fromTime'],
   });
 
+const passengerSchema = z.object({
+  name: z.string().trim().min(1, 'passenger name is required').max(50),
+  age: z.coerce.number().int().min(0, 'age must be 0-120').max(120, 'age must be 0-120'),
+  gender: z.enum(['Female', 'Male', 'Other']),
+});
+
 export const bookingActionSchema = z.object({
   arid: objectId,
   sno: z.preprocess(
@@ -44,6 +50,15 @@ export const bookingActionSchema = z.object({
   ),
   sp: z.string().trim().min(1).max(25),
   fp: z.string().trim().min(1).max(25),
+  passenger: passengerSchema,
+});
+
+export const bookingIdParamSchema = z.object({
+  id: objectId,
+});
+
+export const ticketIdParamSchema = z.object({
+  ticketId: objectId,
 });
 
 export const seatActionSchema = z.object({

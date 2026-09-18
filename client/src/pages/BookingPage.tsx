@@ -6,7 +6,7 @@ import { referenceApi } from "../api/reference";
 import { serializeError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { todayPlusDays, fmtDate } from "../lib/date";
-import type { BookingOffer, BookingResult, OfferSeat } from "../types";
+import type { BookingOffer, BookingResult, OfferSeat, PassengerInput } from "../types";
 import { BusIcon, ChevronDownIcon, DashboardIcon, SearchIcon } from "../components/icons";
 import OfferCard from "../components/booking/OfferCard";
 import TicketDisplay from "../components/booking/TicketDisplay";
@@ -57,6 +57,9 @@ export default function BookingPage() {
   const [expandedOffer, setExpandedOffer] = useState<BookingOffer | null>(null);
   const [booking, setBooking] = useState<BookingResult | null>(null);
   const [actionError, setActionError] = useState("");
+  const [passenger, setPassenger] = useState<{ name: string; age: string; gender: PassengerInput["gender"] }>(
+    { name: "", age: "", gender: "Male" }
+  );
 
   const locationsQuery = useQuery({
     queryKey: ["locations"],
@@ -78,11 +81,19 @@ export default function BookingPage() {
   const bookMutation = useMutation({
     mutationFn: (action: "pending" | "confirm") => {
       if (!pickedOffer || pickedSeats.length === 0) throw new Error("No seat picked");
+      if (!passenger.name.trim() || passenger.age === "") {
+        throw new Error("Passenger details are required");
+      }
       const payload = {
         arid: pickedOffer.arid,
         sno: pickedSeats.map((s) => s.sno),
         sp: pickedOffer.query.sp,
         fp: pickedOffer.query.fp,
+        passenger: {
+          name: passenger.name.trim(),
+          age: Number(passenger.age),
+          gender: passenger.gender,
+        },
       };
       return action === "confirm"
         ? bookingsApi.confirm(payload)
@@ -181,6 +192,12 @@ export default function BookingPage() {
   const offers: BookingOffer[] | null = searchQuery.data ?? null;
   const loading = searchQuery.isFetching;
   const busy = bookMutation.isPending;
+  const passengerValid =
+    passenger.name.trim().length > 0 &&
+    passenger.age !== "" &&
+    Number.isInteger(Number(passenger.age)) &&
+    Number(passenger.age) >= 0 &&
+    Number(passenger.age) <= 120;
   const errorOf = (e: unknown) => (e ? serializeError(e) : "");
   const error = errorOf(locationsQuery.error) || errorOf(searchQuery.error) || actionError;
   const sortedLocations = locationsQuery.data ?? [];
@@ -502,17 +519,57 @@ export default function BookingPage() {
                             ))}
                           </div>
                         ) : <p className="mt-2 text-sm text-slate-500">Pick a seat from the map to proceed.</p>}
-                      </div>  
+                      </div>
+                      <div className="m-2 rounded-card border border-brand-200 bg-white p-3">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                          Passenger details
+                        </h4>
+                        <p className="mt-0.5 text-[11px] text-slate-400">
+                          One passenger applies to all selected seats.
+                        </p>
+                        <div className="mt-2 grid grid-cols-[1fr_5rem_7rem] gap-2">
+                          <Input
+                            placeholder="Full name"
+                            value={passenger.name}
+                            maxLength={50}
+                            onChange={(e) => setPassenger({ ...passenger, name: e.target.value })}
+                            className="w-full px-2 py-1 text-sm"
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            max={120}
+                            placeholder="Age"
+                            value={passenger.age}
+                            onChange={(e) => setPassenger({ ...passenger, age: e.target.value })}
+                            className="w-full px-2 py-1 text-sm"
+                          />
+                          <Select
+                            value={passenger.gender}
+                            onChange={(e) =>
+                              setPassenger({
+                                ...passenger,
+                                gender: e.target.value as PassengerInput["gender"],
+                              })
+                            }
+                            className="w-full px-2 py-1 text-sm"
+                          >
+                            <option value="Female">Female</option>
+                            <option value="Male">Male</option>
+                            <option value="Other">Other</option>
+                          </Select>
+                        </div>
+                      </div>
                       <div className="mt-2 mb-2 flex flex-wrap items-center justify-end gap-2 border-t border-brand-200 pt-2">
                         <Button
-                          disabled={busy || pickedSeats.length === 0}
+                          disabled={busy || pickedSeats.length === 0 || !passengerValid}
                           onClick={() => bookMutation.mutate("confirm")}
                         >
                           Reserve
                         </Button>
                         <Button
                           variant="secondary"
-                          disabled={busy || pickedSeats.length === 0}
+                          disabled={busy || pickedSeats.length === 0 || !passengerValid}
                           onClick={() => bookMutation.mutate("pending")}
                         >
                           On-hold

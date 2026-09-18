@@ -1,5 +1,11 @@
 import api from "./client";
-import type { BookingOffer, BookingResult } from "../types";
+import type {
+  BookingOffer,
+  BookingPayload,
+  BookingResult,
+  MyBooking,
+  PassengerInput,
+} from "../types";
 
 export type SearchOrder = "price" | "time" | "arrival" | "rating";
 
@@ -25,9 +31,51 @@ export const bookingsApi = {
       paramsSerializer: { indexes: null },
     }),
 
-  pending: (payload: { arid: string; sno: number[]; sp: string; fp: string }) =>
+  pending: (payload: BookingPayload) =>
     api.post<BookingResult>("/bookings/pending", payload),
 
-  confirm: (payload: { arid: string; sno: number[]; sp: string; fp: string }) =>
+  confirm: (payload: BookingPayload) =>
     api.post<BookingResult>("/bookings/confirm", payload),
+
+  my: () => api.get<{ bookings: MyBooking[] }>("/bookings/my"),
+
+  get: (id: string) => api.get<{ booking: MyBooking }>(`/bookings/${id}`),
+
+  cancel: (id: string) => api.patch<{ message: string }>(`/bookings/${id}/cancel`),
+
+  cancelTicket: (ticketId: string) =>
+    api.patch<{ message: string }>(`/bookings/tickets/${ticketId}/cancel`),
+
+  passengers: () => api.get<{ schedules: PassengerSchedule[] }>("/bookings/passengers"),
 };
+
+export interface PassengerSchedule {
+  _id: string;
+  trdate: string;
+  trtime: string;
+  bsstatus: string;
+  bus: { _id: string; bname: string; plateNumber: string } | null;
+  route: { rid: string; sp: string; fp: string } | null;
+  price: number;
+  tickets: PassengerTicket[];
+}
+
+export interface PassengerTicket {
+  _id: string;
+  sno: number;
+  blc: string;
+  sna: string;
+  trdate: string;
+  trtime: string;
+  price: number;
+  tstatus: string;
+  payment: string;
+  passengerName: string;
+  passengerAge: number | null;
+  passengerGender: string;
+  bus: { _id: string; bname: string; plateNumber: string } | null;
+  route: { rid: string; sp: string; fp: string } | null;
+  segment: { sp: string; fp: string } | null;
+}
+
+export type { PassengerInput };

@@ -20,7 +20,7 @@ export const getStats = asyncHandler(async (req, res) => {
   // users count their own.
   let pendingFilter;
   if (user.ustatus === 'admin') {
-    pendingFilter = { tstatus: 'P' };
+    pendingFilter = { tstatus: 'held' };
   } else if (user.ustatus === 'operator') {
     const ownScheds = await BusSchedule.find({ bid: { $in: ownBusIds } }).select('_id').lean();
     const ownArs = await ScheduleRoute.find({
@@ -29,9 +29,9 @@ export const getStats = asyncHandler(async (req, res) => {
     })
       .select('_id')
       .lean();
-    pendingFilter = { tstatus: 'P', arid: { $in: ownArs.map((a) => a._id) } };
+    pendingFilter = { tstatus: 'held', arid: { $in: ownArs.map((a) => a._id) } };
   } else {
-    pendingFilter = { tstatus: 'P', uid: user._id };
+    pendingFilter = { tstatus: 'held', uid: user._id };
   }
   const ticketsPending = await Ticket.countDocuments(pendingFilter);
 

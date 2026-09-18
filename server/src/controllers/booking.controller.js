@@ -6,6 +6,7 @@ import Location from '../models/Location.js';
 import Seat from '../models/Seat.js';
 import Ticket from '../models/Ticket.js';
 import User from '../models/User.js';
+import { Types } from 'mongoose';
 import { seatAt, seatRows } from '../domain/seatmap.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { runInTransaction } from '../utils/tx.js';
@@ -20,7 +21,7 @@ const releaseExpiredHeld = async () => {
   if (expired.length === 0) return;
   const ids = expired.map((s) => s._id);
 
-  const tickets = await Ticket.find({ ssid: { $in: ids }, tstatus: 'P' })
+  const tickets = await Ticket.find({ ssid: { $in: ids }, tstatus: 'held' })
     .select('uid price')
     .lean();
   await Ticket.deleteMany({ ssid: { $in: ids } });
@@ -273,7 +274,7 @@ const findEligible = async (arid) => {
 };
 
 const createBooking = async (req, res, action) => {
-  const { arid, sp, fp } = req.validated.body;
+  const { arid, sp, fp, passenger } = req.validated.body;
   const snos = [...new Set(req.validated.body.sno)];
   if (snos.length === 0) throw new AppError(400, 'At least one seat is required');
 
@@ -310,7 +311,8 @@ const createBooking = async (req, res, action) => {
   }
 
   const seatStatus = action === 'confirm' ? 'reserved' : 'held';
-  const ticketStatus = action === 'confirm' ? 'R' : 'P';
+  const ticketStatus = action === 'confirm' ? 'reserved' : 'held';
+  const bookingRef = new Types.ObjectId();
   const { tickets, seats } = await runInTransaction(async (session) => {
     const s = session ? { session } : {};
 
@@ -363,6 +365,10 @@ const createBooking = async (req, res, action) => {
         tstatus: ticketStatus,
         payment: 'due',
         pyreby: 'none',
+        bookingRef,
+        passengerName: passenger.name,
+        passengerAge: passenger.age,
+        passengerGender: passenger.gender,
       })),
       { ...s, ordered: true }
     );
@@ -394,6 +400,10 @@ const createBooking = async (req, res, action) => {
         tstatus: t.tstatus,
         payment: t.payment,
         pyreby: t.pyreby,
+        bookingRef: t.bookingRef,
+        passengerName: t.passengerName,
+        passengerAge: t.passengerAge,
+        passengerGender: t.passengerGender,
       })),
     };
   });
@@ -411,9 +421,240 @@ const createBooking = async (req, res, action) => {
       amenities: bus.amenities ?? [],
     },
     price: seg.price * snos.length,
+    bookingRef,
+    passenger,
   });
 };
 
 export { findEligible, segmentFor, overlaps };
 export const createPendingBooking = asyncHandler((req, res) => createBooking(req, res, 'pending'));
 export const createConfirmBooking = asyncHandler((req, res) => createBooking(req, res, 'confirm'));
+
+// Enrich ticket docs with bus + route + segment, legacy user-view style.
+const attachBookingDetails = async (tickets) => {
+  if (tickets.length === 0) return [];
+
+  const arIds = [...new Set(tickets.map((t) => String(t.arid)))];
+  const addroutes = await ScheduleRoute.find({ _id: { $in: arIds } }).lean();
+  const ridList = [...new Set(addroutes.map((a) => String(a.rid)))];
+  const bsidList = [...new Set(addroutes.map((a) => String(a.bsid)))];
+  const [schedules, routes] = await Promise.all([
+    BusSchedule.find({ _id: { $in: bsidList } }).lean(),
+    Route.find({ _id: { $in: ridList } }).lean(),
+  ]);
+  const busIdList = [...new Set(schedules.map((s) => String(s.bid)))];
+  const [seats, buses] = await Promise.all([
+    Seat.find({ _id: { $in: tickets.map((t) => t.ssid) } }).select('sp fp price status').lean(),
+    Bus.find({ _id: { $in: busIdList } }).populate('busTypeId', 'name').lean(),
+  ]);
+  const seatMap = new Map(seats.map((s) => [String(s._id), s]));
+  const arMap = new Map(addroutes.map((a) => [String(a._id), a]));
+  const schedMap = new Map(schedules.map((s) => [String(s._id), s]));
+  const routeMap = new Map(routes.map((r) => [String(r._id), r]));
+  const busMap = new Map(buses.map((b) => [String(b._id), b]));
+
+  return tickets.map((t) => {
+    const seat = seatMap.get(String(t.ssid));
+    const addroute = arMap.get(String(t.arid));
+    const route = addroute ? routeMap.get(String(addroute.rid)) : undefined;
+    const schedule = addroute ? schedMap.get(String(addroute.bsid)) : undefined;
+    const bus = schedule ? busMap.get(String(schedule.bid)) : undefined;
+    return {
+      ...t,
+      bus: bus
+        ? {
+            _id: bus._id,
+            bname: bus.bname,
+            plateNumber: bus.plateNumber,
+            busTypeName: bus.busTypeId?.name ?? null,
+          }
+        : null,
+      route: route ? { rid: route._id, sp: route.sp, fp: route.fp } : null,
+      segment: seat ? { sp: seat.sp, fp: seat.fp, price: seat.price ?? t.price } : null,
+    };
+  });
+};
+
+const groupStatus = (tickets) => {
+  const statuses = new Set(tickets.map((t) => t.tstatus));
+  if (statuses.size === 1) return tickets[0].tstatus;
+  if (statuses.has('reserved')) return 'reserved';
+  return 'held';
+};
+
+const groupBookings = (tickets) => {
+  const groups = new Map();
+  for (const t of tickets) {
+    const key = String(t.bookingRef ?? t._id);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(t);
+  }
+
+  return [...groups.values()].map((group) => {
+    const first = group[0];
+    const totalPrice = group.reduce((sum, t) => sum + (t.price ?? 0), 0);
+    return {
+      bookingRef: String(first.bookingRef ?? first._id),
+      arid: first.arid,
+      trdate: first.trdate,
+      trtime: first.trtime,
+      bus: first.bus,
+      route: first.route,
+      seats: group.map((t) => ({
+        sno: t.sno,
+        blc: t.blc,
+        sna: t.sna,
+        price: t.price,
+        ticketId: t._id,
+        passengerName: t.passengerName,
+      })),
+      totalPrice,
+      status: groupStatus(group),
+      payment: group.some((t) => t.payment === 'Clear') ? 'Clear' : 'due',
+      tickets: group,
+    };
+  });
+};
+
+// GET /api/bookings/my — owner's bookings grouped by bookingRef for tabs.
+export const listMyBookings = asyncHandler(async (req, res) => {
+  const tickets = await Ticket.find({ uid: req.user._id }).sort({ trdate: -1 }).lean();
+  const enriched = await attachBookingDetails(tickets);
+  const bookings = groupBookings(enriched).sort(
+    (a, b) => new Date(b.trdate) - new Date(a.trdate) || a.trtime.localeCompare(b.trtime)
+  );
+  res.json({ bookings });
+});
+
+// GET /api/bookings/:id — a single owner booking group (bookingRef).
+export const getBookingById = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id }).sort({ sno: 1 }).lean();
+  if (tickets.length === 0) throw new AppError(404, 'Booking not found');
+  const enriched = await attachBookingDetails(tickets);
+  res.json({ booking: groupBookings(enriched)[0] });
+});
+
+// Reverse a single ticket's ledger + release its seat (shared group/individual cancel).
+// Mirrors legacy tedit 'E'. A cleared payment cannot be cancelled here (refunds arrive
+// with the payment module); we reject it rather than silently corrupt the ledger.
+const cancelTicket = async (session, ticket, user) => {
+  if (ticket.tstatus === 'cancelled') return false;
+  if (ticket.payment === 'Clear') {
+    throw new AppError(400, 'Ticket payment already cleared');
+  }
+  const s = session ? { session } : {};
+  const inc = { totaltc: -1, due: -ticket.price, points: -1 };
+  if (ticket.tstatus === 'reserved') inc.reservedtc = -1;
+  else inc.pendingtc = -1;
+  await User.updateOne({ _id: user._id }, { $inc: inc }, s);
+  await Seat.deleteOne({ _id: ticket.ssid }, s);
+  await Ticket.updateOne({ _id: ticket._id }, { $set: { tstatus: 'cancelled' } }, s);
+  return true;
+};
+
+// PATCH /api/bookings/:id/cancel — cancel every non-cancelled ticket in the group.
+export const cancelBooking = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id });
+  if (tickets.length === 0) throw new AppError(404, 'Booking not found');
+
+  let cancelled = 0;
+  await runInTransaction(async (session) => {
+    for (const t of tickets) {
+      if (await cancelTicket(session, t, req.user)) cancelled++;
+    }
+  });
+
+  res.json({ message: cancelled > 0 ? 'Booking cancelled' : 'No change', bookingRef: id });
+});
+
+// PATCH /api/bookings/tickets/:ticketId/cancel — cancel a single ticket in a group.
+export const cancelBookingTicket = asyncHandler(async (req, res) => {
+  const { ticketId } = req.validated.params;
+  const ticket = await Ticket.findById(ticketId);
+  if (!ticket) throw new AppError(404, 'Ticket not found');
+  if (String(ticket.uid) !== String(req.user._id)) {
+    throw new AppError(403, 'Not your ticket');
+  }
+
+  let cancelled = false;
+  await runInTransaction(async (session) => {
+    cancelled = await cancelTicket(session, ticket, req.user);
+  });
+
+  res.json({ message: cancelled ? 'Ticket cancelled' : 'No change', ticketId });
+});
+
+// GET /api/bookings/passengers — staff payment/booking list (mirrors legacy busticketlist).
+// Schedules from today forward with an approved price, each with passenger rows.
+export const listPassengers = asyncHandler(async (req, res) => {
+  const today = startOfDay(new Date());
+  const scheduleFilter = { trdate: { $gte: today }, deletedAt: null };
+  if (req.user.ustatus === 'operator') {
+    const ownBusIds = await Bus.find({ uid: req.user._id, deletedAt: null }).select('_id').lean();
+    scheduleFilter.bid = { $in: ownBusIds.map((b) => b._id) };
+  }
+  const schedules = await BusSchedule.find(scheduleFilter).sort({ trdate: 1, trtime: 1 }).lean();
+  if (schedules.length === 0) return res.json({ schedules: [] });
+  const schedMap = new Map(schedules.map((s) => [String(s._id), s]));
+
+  const addroutes = await ScheduleRoute.find({
+    bsid: { $in: schedules.map((s) => s._id) },
+    arstatus: 'approved',
+    deletedAt: null,
+  })
+    .populate('rid', 'sp fp')
+    .lean();
+  const ars = addroutes.filter((a) => schedMap.has(String(a.bsid)));
+  if (ars.length === 0) return res.json({ schedules: [] });
+
+  const busIds = [...new Set(ars.map((a) => String(schedMap.get(String(a.bsid)).bid)))];
+  const buses = await Bus.find({ _id: { $in: busIds } }).populate('busTypeId', 'name').lean();
+  const busMap = new Map(buses.map((b) => [String(b._id), b]));
+
+  const out = [];
+  for (const ar of ars) {
+    const schedule = schedMap.get(String(ar.bsid));
+    if (!schedule) continue;
+    const bus = busMap.get(String(schedule.bid));
+    const tickets = await Ticket.find({ arid: ar._id }).sort({ sno: 1 }).lean();
+    const enriched = await attachBookingDetails(tickets);
+    out.push({
+      bsid: ar.bsid,
+      arid: ar._id,
+      trdate: schedule.trdate,
+      trtime: schedule.trtime,
+      bsstatus: schedule.bsstatus,
+      bus: bus
+        ? {
+            _id: bus._id,
+            bname: bus.bname,
+            plateNumber: bus.plateNumber,
+            busTypeName: bus.busTypeId?.name ?? null,
+          }
+        : null,
+      route: ar.rid,
+      price: ar.price,
+      tickets: enriched.map((t) => ({
+        _id: t._id,
+        sno: t.sno,
+        blc: t.blc,
+        sna: t.sna,
+        trdate: t.trdate,
+        trtime: t.trtime,
+        price: t.price,
+        tstatus: t.tstatus,
+        payment: t.payment,
+        passengerName: t.passengerName,
+        passengerAge: t.passengerAge,
+        passengerGender: t.passengerGender,
+        bus: t.bus,
+        route: t.route,
+        segment: t.segment ? { sp: t.segment.sp, fp: t.segment.fp } : null,
+      })),
+    });
+  }
+
+  res.json({ schedules: out });
+});

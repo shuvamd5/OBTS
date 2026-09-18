@@ -72,7 +72,7 @@ const result: BookingResult = {
     price: 500,
     uid: "u1",
     treby: "Test Customer",
-    tstatus: "R",
+    tstatus: "reserved",
     payment: "due",
     pyreby: "none",
   },
@@ -125,6 +125,13 @@ async function pickSeat(user: ReturnType<typeof userEvent.setup>) {
   await screen.findByText("Confirm booking");
 }
 
+async function fillPassenger(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByPlaceholderText("Full name"), "Ram Bahadur");
+  await user.type(screen.getByPlaceholderText("Age"), "30");
+}
+
+const passengerPayload = { name: "Ram Bahadur", age: 30, gender: "Male" };
+
 const offer2: BookingOffer = {
   ...offer,
   counts: { available: 2, held: 0, reserved: 0 },
@@ -158,6 +165,7 @@ describe("BookingPage", () => {
 
       await fillSearchAndRun(user);
       await pickSeat(user);
+      await fillPassenger(user);
 
       await user.click(screen.getByRole("button", { name: "Reserve" }));
 
@@ -167,6 +175,7 @@ describe("BookingPage", () => {
         sno: [1],
         sp: "KTM",
         fp: "PKR",
+        passenger: passengerPayload,
       });
       await waitFor(() => expect(bookings.pending).not.toHaveBeenCalled());
     },
@@ -174,12 +183,13 @@ describe("BookingPage", () => {
   );
 
   it("puts a picked seat on-hold instead of reserving it", async () => {
-    bookings.pending.mockResolvedValue({ data: { ...result, ticket: { ...result.ticket, tstatus: "P" as const } } });
+    bookings.pending.mockResolvedValue({ data: { ...result, ticket: { ...result.ticket, tstatus: "held" as const } } });
     const user = userEvent.setup();
     renderPage();
 
     await fillSearchAndRun(user);
     await pickSeat(user);
+    await fillPassenger(user);
 
     await user.click(screen.getByRole("button", { name: "On-hold" }));
 
@@ -189,6 +199,7 @@ expect(bookings.pending).toHaveBeenCalledWith({
         sno: [1],
         sp: "KTM",
         fp: "PKR",
+        passenger: passengerPayload,
       });
     await waitFor(() => expect(bookings.confirm).not.toHaveBeenCalled());
   });
@@ -239,6 +250,8 @@ expect(bookings.pending).toHaveBeenCalledWith({
 
       await user.click(screen.getByRole("button", { name: /B2/ }));
 
+      await fillPassenger(user);
+
       await user.click(screen.getByRole("button", { name: "Reserve" }));
 
       await screen.findByText("registration complete");
@@ -247,6 +260,7 @@ expect(bookings.pending).toHaveBeenCalledWith({
         sno: [1, 2],
         sp: "KTM",
         fp: "PKR",
+        passenger: passengerPayload,
       });
     },
     15000
