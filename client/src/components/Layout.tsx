@@ -57,6 +57,11 @@ export default function Layout() {
                 <NavLink to="/bookings" className={linkClass}>
                   My Bookings
                 </NavLink>
+                {staff && (
+                  <NavLink to="/payments" className={linkClass}>
+                    Payment Desk
+                  </NavLink>
+                )}
                 {isAdmin(user) && (
                   <>
                     <NavLink to="/bus-types" className={linkClass}>

@@ -15,6 +15,7 @@ import {
   getBookingById,
   cancelBooking,
   cancelBookingTicket,
+  reserveBooking,
   listPassengers,
 } from '../controllers/booking.controller.js';
 
@@ -44,6 +45,12 @@ router.patch(
   requireAuth,
   validate(bookingIdParamSchema, 'params'),
   cancelBooking
+);
+router.post(
+  '/:id/reserve',
+  requireAuth,
+  validate(bookingIdParamSchema, 'params'),
+  reserveBooking
 );
 
 export default router;

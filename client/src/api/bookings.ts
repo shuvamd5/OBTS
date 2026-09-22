@@ -46,6 +46,9 @@ export const bookingsApi = {
   cancelTicket: (ticketId: string) =>
     api.patch<{ message: string }>(`/bookings/tickets/${ticketId}/cancel`),
 
+  reserve: (id: string) =>
+    api.post<{ message: string; count: number }>(`/bookings/${id}/reserve`),
+
   passengers: () => api.get<{ schedules: PassengerSchedule[] }>("/bookings/passengers"),
 };
 
@@ -69,7 +72,8 @@ export interface PassengerTicket {
   trtime: string;
   price: number;
   tstatus: string;
-  payment: string;
+  paymentStatus: string;
+  paymentId: string | null;
   passengerName: string;
   passengerPhone: string;
   passengerAge: number | null;

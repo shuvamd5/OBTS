@@ -5,6 +5,7 @@ import Route from '../models/Route.js';
 import Location from '../models/Location.js';
 import Seat from '../models/Seat.js';
 import Ticket from '../models/Ticket.js';
+import Payment from '../models/Payment.js';
 import User from '../models/User.js';
 import { Types } from 'mongoose';
 import { seatAt, seatRows } from '../domain/seatmap.js';
@@ -313,7 +314,7 @@ const createBooking = async (req, res, action) => {
   const seatStatus = action === 'confirm' ? 'reserved' : 'held';
   const ticketStatus = action === 'confirm' ? 'reserved' : 'held';
   const bookingRef = new Types.ObjectId();
-  const { tickets, seats } = await runInTransaction(async (session) => {
+  const { tickets, seats, payments } = await runInTransaction(async (session) => {
     const s = session ? { session } : {};
 
     let created;
@@ -363,13 +364,23 @@ const createBooking = async (req, res, action) => {
         uid: req.user._id,
         treby: req.user.uname,
         tstatus: ticketStatus,
-        payment: 'due',
+        paymentStatus: 'pending',
         pyreby: 'none',
         bookingRef,
         passengerName: passenger.name,
         passengerPhone: passenger.phone,
         passengerAge: passenger.age,
         passengerGender: passenger.gender,
+      })),
+      { ...s, ordered: true }
+    );
+
+    const createdPayments = await Payment.create(
+      createdTickets.map((t) => ({
+        ticketId: t._id,
+        bookingRef,
+        userId: req.user._id,
+        amount: seg.price,
       })),
       { ...s, ordered: true }
     );
@@ -386,7 +397,7 @@ const createBooking = async (req, res, action) => {
         trdate: schedule.trdate,
         trtime: schedule.trtime,
       })),
-      tickets: createdTickets.map((t) => ({
+      tickets: createdTickets.map((t, i) => ({
         _id: t._id,
         arid,
         ssid: t.ssid,
@@ -399,13 +410,20 @@ const createBooking = async (req, res, action) => {
         uid: t.uid,
         treby: t.treby,
         tstatus: t.tstatus,
-        payment: t.payment,
+        paymentStatus: t.paymentStatus,
         pyreby: t.pyreby,
         bookingRef: t.bookingRef,
+        paymentId: createdPayments[i]._id,
         passengerName: t.passengerName,
         passengerPhone: t.passengerPhone,
         passengerAge: t.passengerAge,
         passengerGender: t.passengerGender,
+      })),
+      payments: createdPayments.map((p) => ({
+        _id: p._id,
+        ticketId: p.ticketId,
+        amount: p.amount,
+        status: p.status,
       })),
     };
   });
@@ -414,6 +432,7 @@ const createBooking = async (req, res, action) => {
     message: 'registration complete',
     tickets,
     seats,
+    payments,
     ticket: tickets[0],
     seat: seats[0],
     bus: {
@@ -484,6 +503,17 @@ const groupStatus = (tickets) => {
   return 'held';
 };
 
+// Group payment summary from per-ticket paymentStatus:
+// all paid → 'paid', all refunded → 'refunded', none paid → 'pending', mixed → 'partial'.
+const groupPayment = (tickets) => {
+  const statuses = new Set(tickets.map((t) => t.paymentStatus ?? 'pending'));
+  if (statuses.size === 1) {
+    const only = tickets[0].paymentStatus ?? 'pending';
+    return only === 'paid' ? 'paid' : only === 'refunded' ? 'refunded' : 'pending';
+  }
+  return 'partial';
+};
+
 const groupBookings = (tickets) => {
   const groups = new Map();
   for (const t of tickets) {
@@ -513,7 +543,7 @@ const groupBookings = (tickets) => {
       })),
       totalPrice,
       status: groupStatus(group),
-      payment: group.some((t) => t.payment === 'Clear') ? 'Clear' : 'due',
+      payment: groupPayment(group),
       tickets: group,
     };
   });
@@ -539,12 +569,12 @@ export const getBookingById = asyncHandler(async (req, res) => {
 });
 
 // Reverse a single ticket's ledger + release its seat (shared group/individual cancel).
-// Mirrors legacy tedit 'E'. A cleared payment cannot be cancelled here (refunds arrive
-// with the payment module); we reject it rather than silently corrupt the ledger.
+// Mirrors legacy tedit 'E'. A paid ticket cannot be cancelled here — refunds are
+// processed by admin via the payment module (refund = full cancel).
 const cancelTicket = async (session, ticket, user) => {
   if (ticket.tstatus === 'cancelled') return false;
-  if (ticket.payment === 'Clear') {
-    throw new AppError(400, 'Ticket payment already cleared');
+  if (ticket.paymentStatus === 'paid') {
+    throw new AppError(400, 'Ticket payment already made — refund it first');
   }
   const s = session ? { session } : {};
   const inc = { totaltc: -1, due: -ticket.price, points: -1 };
@@ -553,6 +583,7 @@ const cancelTicket = async (session, ticket, user) => {
   await User.updateOne({ _id: user._id }, { $inc: inc }, s);
   await Seat.deleteOne({ _id: ticket.ssid }, s);
   await Ticket.updateOne({ _id: ticket._id }, { $set: { tstatus: 'cancelled' } }, s);
+  await Payment.deleteOne({ ticketId: ticket._id }, s);
   return true;
 };
 
@@ -589,6 +620,44 @@ export const cancelBookingTicket = asyncHandler(async (req, res) => {
   res.json({ message: cancelled ? 'Ticket cancelled' : 'No change', ticketId });
 });
 
+// POST /api/bookings/:id/reserve — promote the group's held tickets to reserved
+// (seat reserved + lockExpiry cleared, ledger held→reserved). Payments already
+// exist (minted pending at booking) so nothing moves there. Expired holds are
+// skipped — the user must rebook if the seats were already released.
+export const reserveBooking = asyncHandler(async (req, res) => {
+  const { id } = req.validated.params;
+  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id, tstatus: 'held' }).lean();
+  if (tickets.length === 0) throw new AppError(400, 'No held tickets to reserve');
+
+  const count = await runInTransaction(async (session) => {
+    const s = session ? { session } : {};
+    let n = 0;
+    for (const t of tickets) {
+      const seat = await Seat.findById(t.ssid, null, s);
+      if (!seat || seat.status !== 'held') continue;
+      if (seat.lockExpiry && new Date(seat.lockExpiry).getTime() <= Date.now()) continue;
+      await Seat.updateOne(
+        { _id: seat._id },
+        { $set: { status: 'reserved', lockExpiry: null } },
+        s
+      );
+      await Ticket.updateOne({ _id: t._id }, { $set: { tstatus: 'reserved' } }, s);
+      await User.updateOne(
+        { _id: req.user._id },
+        { $inc: { reservedtc: 1, pendingtc: -1 } },
+        s
+      );
+      n += 1;
+    }
+    return n;
+  });
+
+  if (count === 0) {
+    throw new AppError(409, 'Seats no longer on hold — they were released. Please book again.');
+  }
+  res.json({ message: `${count} seat(s) reserved`, count, bookingRef: id });
+});
+
 // GET /api/bookings/passengers — staff payment/booking list (mirrors legacy busticketlist).
 // Schedules from today forward with an approved price, each with passenger rows.
 export const listPassengers = asyncHandler(async (req, res) => {
@@ -621,8 +690,16 @@ export const listPassengers = asyncHandler(async (req, res) => {
     const schedule = schedMap.get(String(ar.bsid));
     if (!schedule) continue;
     const bus = busMap.get(String(schedule.bid));
-    const tickets = await Ticket.find({ arid: ar._id }).sort({ sno: 1 }).lean();
+    const tickets = await Ticket.find({ arid: ar._id, tstatus: { $ne: 'cancelled' } })
+      .sort({ sno: 1 })
+      .lean();
     const enriched = await attachBookingDetails(tickets);
+    const payments = await Payment.find({
+      ticketId: { $in: tickets.map((t) => t._id) },
+    })
+      .select('_id ticketId status')
+      .lean();
+    const payMap = new Map(payments.map((p) => [String(p.ticketId), p]));
     out.push({
       bsid: ar.bsid,
       arid: ar._id,
@@ -648,7 +725,8 @@ export const listPassengers = asyncHandler(async (req, res) => {
         trtime: t.trtime,
         price: t.price,
         tstatus: t.tstatus,
-        payment: t.payment,
+        paymentStatus: t.paymentStatus,
+        paymentId: payMap.get(String(t._id))?._id ?? null,
         passengerName: t.passengerName,
         passengerPhone: t.passengerPhone,
         passengerAge: t.passengerAge,

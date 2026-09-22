@@ -9,6 +9,7 @@ const bookings = vi.hoisted(() => ({
   my: vi.fn(),
   cancel: vi.fn(),
   cancelTicket: vi.fn(),
+  reserve: vi.fn(),
   search: vi.fn(),
   pending: vi.fn(),
   confirm: vi.fn(),
@@ -16,7 +17,10 @@ const bookings = vi.hoisted(() => ({
   passengers: vi.fn(),
 }));
 
+const payments = vi.hoisted(() => ({ create: vi.fn() }));
+
 vi.mock("../api/bookings", () => ({ bookingsApi: bookings }));
+vi.mock("../api/payments", () => ({ paymentsApi: payments }));
 
 import MyBookingsPage from "./MyBookingsPage";
 
@@ -33,7 +37,7 @@ const ticket = (over: Partial<MyBookingTicket> = {}): MyBookingTicket => ({
   uid: "u1",
   treby: "Ram",
   tstatus: "reserved",
-  payment: "due",
+  paymentStatus: "paid",
   pyreby: "none",
   bookingRef: "ref-res",
   passengerName: "Ram Bahadur",
@@ -56,7 +60,7 @@ const reserved: MyBooking = {
   seats: [{ sno: 1, blc: "B", sna: "1", price: 500, ticketId: "t1", passengerName: "Ram Bahadur" }],
   totalPrice: 500,
   status: "reserved",
-  payment: "due",
+  payment: "paid",
   tickets: [ticket()],
 };
 
@@ -85,6 +89,8 @@ describe("MyBookingsPage", () => {
     bookings.my.mockReset();
     bookings.cancel.mockReset();
     bookings.cancelTicket.mockReset();
+    bookings.reserve.mockReset();
+    payments.create.mockReset();
   });
 
   it("groups bookings under status tabs and shows booking details", async () => {
@@ -132,5 +138,26 @@ describe("MyBookingsPage", () => {
 
     await waitFor(() => expect(bookings.cancelTicket).toHaveBeenCalledWith("t1"));
     expect(bookings.cancel).not.toHaveBeenCalled();
+  });
+
+  it("lets the user reserve a held booking and pay online", async () => {
+    bookings.my.mockResolvedValue({ data: { bookings: [held, reserved] } });
+    bookings.reserve.mockResolvedValue({ data: { message: "1 seat(s) reserved", count: 1 } });
+    payments.create.mockResolvedValue({
+      data: { transactionId: "tx1", amount: 500, gateway: "MockGateway" },
+    });
+    const user = userEvent.setup();
+    renderPage();
+
+    await screen.findByText("My Bookings");
+    await user.click(await screen.findByRole("button", { name: "Reserve seat" }));
+
+    await screen.findByText(/Pay online/);
+    expect(screen.getByText(/Seats become reserved now/)).toBeInTheDocument();
+    await user.click(screen.getByText("Pay online"));
+    await user.click(screen.getByRole("button", { name: "Reserve & pay online" }));
+
+    await waitFor(() => expect(bookings.reserve).toHaveBeenCalledWith("ref-held"));
+    await waitFor(() => expect(payments.create).toHaveBeenCalledWith({ bookingRef: "ref-held" }));
   });
 });

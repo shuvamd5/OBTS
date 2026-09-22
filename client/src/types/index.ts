@@ -141,6 +141,10 @@ export interface AppStats {
 
 export type SeatStatus = "available" | "held" | "reserved";
 export type TicketStatus = "held" | "reserved" | "cancelled";
+export type PaymentStatus = "pending" | "paid" | "refunded" | "failed";
+export type PaymentMethod = "cash" | "online";
+export type TicketPaymentStatus = PaymentStatus;
+export type BookingPayment = PaymentStatus | "partial";
 
 export interface OfferSeat {
   sno: number;
@@ -194,7 +198,8 @@ export interface BookingTicket {
   uid: string;
   treby: string;
   tstatus: TicketStatus;
-  payment: string;
+  paymentStatus: PaymentStatus;
+  paymentId?: string;
   pyreby: string;
   bookingRef?: string | null;
   passengerName?: string;
@@ -221,6 +226,7 @@ export interface BookingResult {
   ticket: BookingTicket;
   seats?: BookingSeat[];
   seat: BookingSeat;
+  payments?: PaymentRecord[];
   bus: {
     bname: string;
     plateNumber: string;
@@ -263,6 +269,21 @@ export interface MyBooking {
   seats: { sno: number; blc: string; sna: string; price: number; ticketId: string; passengerName: string; passengerPhone?: string }[];
   totalPrice: number;
   status: TicketStatus;
-  payment: "Clear" | "due";
+  payment: BookingPayment;
   tickets: MyBookingTicket[];
+}
+
+export interface PaymentRecord {
+  _id: string;
+  ticketId: string;
+  amount: number;
+  status: PaymentStatus;
+}
+
+export interface PaymentInitResult {
+  message: string;
+  transactionId: string;
+  amount: number;
+  gateway: "esewa" | "khalti";
+  payments: (PaymentRecord & { status: PaymentStatus })[];
 }

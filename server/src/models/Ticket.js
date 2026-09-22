@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 
 export const TICKET_STATUSES = ['held', 'reserved', 'cancelled'];
+export const TICKET_PAYMENT_STATUSES = ['pending', 'paid', 'refunded', 'failed'];
 
 const ticketSchema = new mongoose.Schema(
   {
@@ -15,7 +16,7 @@ const ticketSchema = new mongoose.Schema(
     uid: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
     treby: { type: String, required: true },
     tstatus: { type: String, enum: TICKET_STATUSES, required: true },
-    payment: { type: String, default: 'due' },
+    paymentStatus: { type: String, enum: TICKET_PAYMENT_STATUSES, default: 'pending' },
     pyreby: { type: String, default: 'none' },
     bookingRef: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
     passengerName: { type: String, default: '' },

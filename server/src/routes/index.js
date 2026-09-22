@@ -11,6 +11,7 @@ import bookingRoutes from './booking.routes.js';
 import seatRoutes from './seat.routes.js';
 import busTypeRoutes from './busType.routes.js';
 import locationRoutes from './location.routes.js';
+import paymentRoutes from './payment.routes.js';
 
 const router = Router();
 
@@ -25,6 +26,7 @@ router.use('/schedules', scheduleRoutes);
 router.use('/prices', scheduleRouteRoutes);
 router.use('/seats', seatRoutes);
 router.use('/bookings', bookingRoutes);
+router.use('/payments', paymentRoutes);
 router.use('/stats', statsRoutes);
 
 export default router;

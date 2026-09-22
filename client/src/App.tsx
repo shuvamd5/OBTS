@@ -21,6 +21,8 @@ import AddBusTypePage from "./pages/AddBusTypePage";
 import ManageLocationsPage from "./pages/ManageLocationsPage";
 import SchedulesPage from "./pages/SchedulesPage";
 import AddSchedulePage from "./pages/AddSchedulePage";
+import PaymentGatewayPage from "./pages/PaymentGatewayPage";
+import PaymentDeskPage from "./pages/PaymentDeskPage";
 import ForgotPasswordPage from "./pages/ForgotPasswordPage";
 import ResetPasswordPage from "./pages/ResetPasswordPage";
 import type { ReactNode } from "react";
@@ -48,6 +50,8 @@ export default function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<BookingPage />} />
           <Route path="/bookings" element={<ProtectedRoute><MyBookingsPage /></ProtectedRoute>} />
+          <Route path="/pay/:transactionId" element={<ProtectedRoute><PaymentGatewayPage /></ProtectedRoute>} />
+          <Route path="/payments" element={<ProtectedRoute><StaffRoute><PaymentDeskPage /></StaffRoute></ProtectedRoute>} />
           <Route path="/dashboard" element={<ProtectedRoute><HomePage /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
           <Route path="/profile/edit" element={<ProtectedRoute><ProfileEditPage /></ProtectedRoute>} />

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bookingsApi, type SearchParams, type SearchOrder } from "../api/bookings";
+import { paymentsApi } from "../api/payments";
 import { referenceApi } from "../api/reference";
 import { serializeError } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
@@ -52,12 +53,14 @@ export default function BookingPage() {
   const [draft, setDraft] = useState<FilterDraft>(emptyDraft);
   const [query, setQuery] = useState<SearchParams | null>(null);
 
-  const [pickedOffer, setPickedOffer] = useState<BookingOffer | null>(null);
+  const [pickedArid, setPickedArid] = useState<string | null>(null);
   const [pickedSeats, setPickedSeats] = useState<OfferSeat[]>([]);
-  const [expandedOffer, setExpandedOffer] = useState<BookingOffer | null>(null);
+  const [expandedArid, setExpandedArid] = useState<string | null>(null);
   const [booking, setBooking] = useState<BookingResult | null>(null);
-  const [bookingStep, setBookingStep] = useState<"seats" | "passenger">("seats");
+  const [bookingStep, setBookingStep] = useState<"seats" | "passenger" | "payment" | "held">("seats");
   const [pendingAction, setPendingAction] = useState<"pending" | "confirm">("confirm");
+  const [paymentMethod, setPaymentMethod] = useState<"station" | "online">("station");
+  const paymentMethodRef = useRef<"station" | "online">("station");
   const [actionError, setActionError] = useState("");
   const [passenger, setPassenger] = useState<{
     name: string;
@@ -108,11 +111,24 @@ export default function BookingPage() {
     },
     onMutate: () => setActionError(""),
     onError: (err) => setActionError(serializeError(err)),
-    onSuccess: (res) => {
+    onSuccess: async (res, action) => {
       setBooking(res.data);
-      setBookingStep("seats");
+      setBookingStep(action === "pending" ? "held" : "seats");
       setPendingAction("confirm");
       void queryClient.invalidateQueries({ queryKey: ["offers"] });
+      if (
+        action === "confirm" &&
+        paymentMethodRef.current === "online" &&
+        res.data.bookingRef &&
+        res.data.payments?.length
+      ) {
+        try {
+          const init = await paymentsApi.create({ bookingRef: res.data.bookingRef });
+          void navigate(`/pay/${init.data.transactionId}`);
+        } catch (err) {
+          setActionError(serializeError(err));
+        }
+      }
     },
   });
 
@@ -134,12 +150,13 @@ export default function BookingPage() {
     if (!sp || !fp || !date) return;
     setDraft(emptyDraft);
     setQuery(buildQuery(emptyDraft));
-    setPickedOffer(null);
+    setPickedArid(null);
     setPickedSeats([]);
-    setExpandedOffer(null);
+    setExpandedArid(null);
     setBooking(null);
     setBookingStep("seats");
     setPendingAction("confirm");
+    paymentMethodRef.current = "station";
     setActionError("");
   };
 
@@ -148,27 +165,29 @@ export default function BookingPage() {
     const q = buildQuery(next);
     if (q) {
       setQuery(q);
-      setPickedOffer(null);
+      setPickedArid(null);
       setPickedSeats([]);
-      setExpandedOffer(null);
+      setExpandedArid(null);
       setBooking(null);
       setBookingStep("seats");
       setPendingAction("confirm");
+      paymentMethodRef.current = "station";
       setActionError("");
     }
   };
 
   const toggleExpand = (offer: BookingOffer) => {
-    if (expandedOffer?.arid === offer.arid) {
-      setExpandedOffer(null);
+    if (expandedArid === offer.arid) {
+      setExpandedArid(null);
       return;
     }
-    setExpandedOffer(offer);
-    setPickedOffer(offer);
+    setExpandedArid(offer.arid);
+    setPickedArid(offer.arid);
     setPickedSeats([]);
     setBooking(null);
     setBookingStep("seats");
     setPendingAction("confirm");
+    paymentMethodRef.current = "station";
     setActionError("");
   };
 
@@ -188,10 +207,11 @@ export default function BookingPage() {
     setBooking(null);
     setActionError("");
     if (!pickedOffer || pickedOffer.arid !== offer.arid) {
-      setPickedOffer(offer);
+      setPickedArid(offer.arid);
       setPickedSeats([seat]);
       setBookingStep("seats");
       setPendingAction("confirm");
+      paymentMethodRef.current = "station";
       return;
     }
     const removed = pickedSeats.some((s) => s.sno === seat.sno);
@@ -212,16 +232,26 @@ export default function BookingPage() {
 
   const backToSeats = () => setBookingStep("seats");
 
-  const backFromReceipt = () => {
+  const goToPayment = () => {
+    paymentMethodRef.current = paymentMethod;
+    setBookingStep("payment");
+  };
+
+  const backToPassenger = () => setBookingStep("passenger");
+
+  const backFromReceipt = async () => {
     setBooking(null);
     setPickedSeats([]);
     setBookingStep("seats");
     setPendingAction("confirm");
+    paymentMethodRef.current = "station";
     setActionError("");
-    void queryClient.invalidateQueries({ queryKey: ["offers"] });
+    await queryClient.invalidateQueries({ queryKey: ["offers"] });
   };
 
   const offers: BookingOffer[] | null = searchQuery.data ?? null;
+  const expandedOffer = offers?.find((o) => o.arid === expandedArid) ?? null;
+  const pickedOffer = offers?.find((o) => o.arid === pickedArid) ?? null;
   const loading = searchQuery.isFetching;
   const busy = bookMutation.isPending;
   const passengerValid =
@@ -338,6 +368,27 @@ export default function BookingPage() {
 
       {booking && pickedOffer && (
         <div className={searchActive ? "flex-1 overflow-y-auto p-4" : "mt-6"}>
+          {bookingStep === "held" && (
+            <div className="mx-auto mb-4 max-w-sm rounded-panel border border-amber-300 bg-amber-50 p-4">
+              <h3 className="mb-1 text-base font-bold text-slate-900">Seats on hold</h3>
+              <p className="text-sm leading-relaxed text-slate-600">
+                Your seats are on hold — reserve them as soon as possible to keep them,
+                otherwise they may be released and you could lose them. You can reserve
+                them from My Bookings.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  to="/bookings"
+                  className="rounded-btn bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-700"
+                >
+                  View My Bookings
+                </Link>
+                <Button variant="secondary" onClick={backFromReceipt}>
+                  Book more seats
+                </Button>
+              </div>
+            </div>
+          )}
           <TicketDisplay result={booking} offer={pickedOffer} onBack={backFromReceipt} />
         </div>
       )}
@@ -476,7 +527,7 @@ export default function BookingPage() {
               </p>
             )}
             {offers && expandedOffer && (
-              <div className="sticky top-0 z-10 m-auto rounded-card border border-brand-200 bg-white p-4 min-h-[22rem]">
+              <div className="sticky top-0 z-10 m-auto rounded-card border border-brand-200 bg-white p-4 "> //min-h-[22rem]
                 <div className="flex flex-wrap items-center justify-between gap-3 ">
                   <div className="flex items-center justify-between gap-10 ">
                     <h3 className="text-base font-bold text-slate-900">
@@ -493,7 +544,7 @@ export default function BookingPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setExpandedOffer(null)}
+                    onClick={() => setExpandedArid(null)}
                     className="rounded-btn border border-slate-300 px-2 py-1 text-xs font-semibold text-slate-600 hover:bg-slate-50"
                   >
                     Close
@@ -593,6 +644,52 @@ export default function BookingPage() {
                               </Select>
                             </div>
                           </div>
+                        ) : bookingStep === "payment" ? (
+                          <div className="mt-2 rounded-card border border-brand-200 bg-white p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700">
+                                Payment method
+                              </h4>
+                              <p className="text-[11px] font-semibold text-brand-700">
+                                Rs {pickedSeats.length * pickedOffer.price} total
+                              </p>
+                            </div>
+                            <p className="mt-0.5 text-[11px] text-slate-400">
+                              The passenger details above apply to all selected seats.
+                            </p>
+                            <div className="mt-3 space-y-2">
+                              <label className="flex cursor-pointer items-start gap-2 rounded-card border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50">
+                                <input
+                                  type="radio"
+                                  name="paymentMethod"
+                                  checked={paymentMethod === "station"}
+                                  onChange={() => setPaymentMethod("station")}
+                                  className="mt-1 accent-brand-600"
+                                />
+                                <span>
+                                  <span className="font-semibold text-slate-800">Pay at station</span>
+                                  <span className="block text-xs text-slate-500">
+                                    Pay cash at the counter before boarding. Booking stays pending until paid.
+                                  </span>
+                                </span>
+                              </label>
+                              <label className="flex cursor-pointer items-start gap-2 rounded-card border border-brand-200 px-3 py-2 text-sm hover:bg-brand-50">
+                                <input
+                                  type="radio"
+                                  name="paymentMethod"
+                                  checked={paymentMethod === "online"}
+                                  onChange={() => setPaymentMethod("online")}
+                                  className="mt-1 accent-brand-600"
+                                />
+                                <span>
+                                  <span className="font-semibold text-slate-800">Pay online</span>
+                                  <span className="block text-xs text-slate-500">
+                                    eSewa / Khalti via the mock gateway. Seats reserved instantly.
+                                  </span>
+                                </span>
+                              </label>
+                            </div>
+                          </div>
                         ) : pickedSeats.length > 0 ? (
                           <div className="mt-2 flex flex-wrap gap-2">
                             {pickedSeats.map((s) => (
@@ -619,11 +716,32 @@ export default function BookingPage() {
                             <Button variant="secondary" onClick={backToSeats} disabled={busy}>
                               Edit seats
                             </Button>
+                            {pendingAction === "pending" ? (
+                              <Button
+                                disabled={busy || pickedSeats.length === 0 || !passengerValid}
+                                onClick={() => bookMutation.mutate("pending")}
+                              >
+                                Hold these seats
+                              </Button>
+                            ) : (
+                              <Button
+                                disabled={busy || pickedSeats.length === 0 || !passengerValid}
+                                onClick={goToPayment}
+                              >
+                                Continue
+                              </Button>
+                            )}
+                          </>
+                        ) : bookingStep === "payment" ? (
+                          <>
+                            <Button variant="secondary" onClick={backToPassenger} disabled={busy}>
+                              Edit passenger
+                            </Button>
                             <Button
-                              disabled={busy || pickedSeats.length === 0 || !passengerValid}
+                              disabled={busy || pickedSeats.length === 0}
                               onClick={() => bookMutation.mutate(pendingAction)}
                             >
-                              Confirm
+                              {paymentMethod === "online" ? "Pay online" : "Confirm booking"}
                             </Button>
                           </>
                         ) : (

@@ -24,4 +24,13 @@ export const config = {
     name: 'refreshToken',
     secure: process.env.NODE_ENV === 'production',
   },
+  mockGateway: process.env.MOCK_PAYMENT_GATEWAY !== 'false',
+  mail: {
+    host: process.env.MAIL_HOST || null,
+    port: Number(process.env.MAIL_PORT) || 587,
+    secure: process.env.MAIL_SECURE === 'true',
+    user: process.env.MAIL_USER || null,
+    pass: process.env.MAIL_PASS || null,
+    from: process.env.MAIL_FROM || null,
+  },
 };

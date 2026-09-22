@@ -5,22 +5,22 @@ import ScheduleRoute from '../models/ScheduleRoute.js';
 // Module 5 enums so controllers never see values outside the new enum.
 const SCHEDULE_SWITCH = {
   branches: [
-    { case: 'not approved', then: 'pending' },
-    { case: 'pending', then: 'pending' },
-    { case: 'going', then: 'approved' },
-    { case: 'not going', then: 'not_going' },
-    { case: 'Expired', then: 'expired' },
+    { case: { $eq: ['$bsstatus', 'not approved'] }, then: 'pending' },
+    { case: { $eq: ['$bsstatus', 'pending'] }, then: 'pending' },
+    { case: { $eq: ['$bsstatus', 'going'] }, then: 'approved' },
+    { case: { $eq: ['$bsstatus', 'not going'] }, then: 'not_going' },
+    { case: { $eq: ['$bsstatus', 'Expired'] }, then: 'expired' },
   ],
   default: '$bsstatus',
 };
 
 const ROUTE_SWITCH = {
   branches: [
-    { case: 'unchecked', then: 'pending' },
-    { case: 'pending', then: 'pending' },
-    { case: 'not ok', then: 'rejected' },
-    { case: 'ok', then: 'approved' },
-    { case: 'Expired', then: 'expired' },
+    { case: { $eq: ['$arstatus', 'unchecked'] }, then: 'pending' },
+    { case: { $eq: ['$arstatus', 'pending'] }, then: 'pending' },
+    { case: { $eq: ['$arstatus', 'not ok'] }, then: 'rejected' },
+    { case: { $eq: ['$arstatus', 'ok'] }, then: 'approved' },
+    { case: { $eq: ['$arstatus', 'Expired'] }, then: 'expired' },
   ],
   default: '$arstatus',
 };

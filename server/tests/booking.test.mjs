@@ -14,6 +14,7 @@ import ScheduleRoute from '../src/models/ScheduleRoute.js';
 import Sales from '../src/models/Sales.js';
 import Seat from '../src/models/Seat.js';
 import Ticket from '../src/models/Ticket.js';
+import Payment from '../src/models/Payment.js';
 import Location from '../src/models/Location.js';
 
 const uniq = Date.now().toString(36);
@@ -530,7 +531,7 @@ try {
   const mine = r.body.bookings[0];
   assert.equal(mine.bookingRef, cRef);
   assert.equal(mine.status, 'reserved');
-  assert.equal(mine.payment, 'due');
+  assert.equal(mine.payment, 'pending');
   assert.equal(mine.seats.length, 2);
   assert.equal(mine.totalPrice, 2000);
   assert.ok(mine.bus && mine.bus.bname, 'booking enriched with bus');
@@ -566,6 +567,23 @@ try {
   assert.equal(await Seat.countDocuments({ _id: cSeat1 }), 0, 'cancelled seat released');
   assert.equal((await Ticket.findById(cTicket1)).tstatus, 'cancelled');
   ok('individual cancel reverses ledger + releases seat');
+
+  // cancelled tickets: payment record removed, hidden from desk, cannot be marked paid
+  assert.equal(await Payment.countDocuments({ ticketId: cTicket1 }), 0, 'cancel drops the Payment doc');
+  r = await request(app)
+    .post('/api/payments/cash')
+    .set(auth(adminToken))
+    .send({ ticketId: cTicket1 });
+  assert.equal(r.status, 400, JSON.stringify(r.body));
+  assert.equal(r.body.message, 'Ticket already cancelled');
+  assert.equal((await Ticket.findById(cTicket1)).paymentStatus, 'pending', 'paymentStatus untouched');
+  r = await request(app).get('/api/bookings/passengers').set(auth(adminToken));
+  assert.equal(
+    r.body.schedules.flatMap((s) => s.tickets).find((t) => String(t._id) === String(cTicket1)),
+    undefined,
+    'cancelled ticket excluded from payment desk'
+  );
+  ok('cancelled ticket: payment dropped + hidden from desk + pay rejected');
 
   r = await request(app).get(`/api/bookings/search?sp=Butwal&fp=Pokhara&date=${day(8)}`);
   assert.equal(r.body.offers[0].seats.find((s) => s.sno === 21).status, 'available');
@@ -631,6 +649,36 @@ try {
   assert.equal(r.status, 200);
   assert.equal(r.body.schedules.length, 0);
   ok('operator with no buses -> scoped empty passengers');
+
+  // ---- reserve a held booking -> reserved (ticket + seat + ledger) ----
+  const holdUser = await register('HoldReserve', 'Male');
+  const holdToken = (await login(holdUser.uemail, 'Test@1234')).accessToken;
+  r = await request(app)
+    .post('/api/bookings/pending')
+    .set(auth(holdToken))
+    .send({ arid: price._id, sno: 35, sp: 'Butwal', fp: 'Pokhara', ...pax });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const holdRef = String(r.body.bookingRef);
+  const holdTicketId = String(r.body.ticket._id);
+  const holdSeatId = String(r.body.seat._id);
+  r = await request(app).post(`/api/bookings/${holdRef}/reserve`).set(auth(holdToken));
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  assert.equal(r.body.count, 1);
+  assert.equal(r.body.bookingRef, holdRef);
+  const hT = await Ticket.findById(holdTicketId).lean();
+  assert.equal(hT.tstatus, 'reserved');
+  const hS = await Seat.findById(holdSeatId).lean();
+  assert.equal(hS.status, 'reserved');
+  assert.equal(hS.lockExpiry, null);
+  const hL = await User.findById(holdUser._id).lean();
+  assert.equal(hL.totaltc, 1);
+  assert.equal(hL.pendingtc, 0);
+  assert.equal(hL.reservedtc, 1);
+  assert.equal(hL.due, 1000);
+  r = await request(app).post(`/api/bookings/${holdRef}/reserve`).set(auth(holdToken));
+  assert.equal(r.status, 400);
+  assert.equal(r.body.message, 'No held tickets to reserve');
+  ok('reserve held booking -> reserved (ticket/seat/ledger) + double reserve 400');
 
   // ---- schedule delete = soft delete: seats + tickets retained ----
   r = await request(app).delete(`/api/schedules/${sched._id}`).set(auth(adminToken));

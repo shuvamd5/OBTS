@@ -73,7 +73,7 @@ const result: BookingResult = {
     uid: "u1",
     treby: "Test Customer",
     tstatus: "reserved",
-    payment: "due",
+    paymentStatus: "pending",
     pyreby: "none",
   },
   seat: {
@@ -169,7 +169,8 @@ describe("BookingPage", () => {
 
       await user.click(screen.getByRole("button", { name: "Reserve" }));
       await fillPassenger(user);
-      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      await user.click(screen.getByRole("button", { name: "Confirm booking" }));
 
       await screen.findByText("registration complete");
       expect(bookings.confirm).toHaveBeenCalledWith({
@@ -184,7 +185,7 @@ describe("BookingPage", () => {
     15000
   );
 
-  it("puts a picked seat on-hold instead of reserving it", async () => {
+  it("puts a picked seat on-hold without a payment step", async () => {
     bookings.pending.mockResolvedValue({ data: { ...result, ticket: { ...result.ticket, tstatus: "held" as const } } });
     const user = userEvent.setup();
     renderPage();
@@ -194,10 +195,12 @@ describe("BookingPage", () => {
 
     await user.click(screen.getByRole("button", { name: "On-hold" }));
     await fillPassenger(user);
-    await user.click(screen.getByRole("button", { name: "Confirm" }));
+    await user.click(screen.getByRole("button", { name: "Hold these seats" }));
 
-    await screen.findByText("registration complete");
-expect(bookings.pending).toHaveBeenCalledWith({
+    await screen.findByText("Seats on hold");
+    expect(screen.getByText(/reserve them as soon as possible/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View My Bookings" })).toBeInTheDocument();
+    expect(bookings.pending).toHaveBeenCalledWith({
         arid: "arid1",
         sno: [1],
         sp: "KTM",
@@ -265,7 +268,17 @@ expect(bookings.pending).toHaveBeenCalledWith({
         seat: result.seat,
         price: 1000,
       };
-      bookings.search.mockResolvedValue({ data: { offers: [offer2] } });
+      const reservedOffer2: BookingOffer = {
+        ...offer2,
+        counts: { available: 0, held: 0, reserved: 2 },
+        seats: [
+          { sno: 1, blc: "B", sna: "1", status: "reserved", lockExpiry: null },
+          { sno: 2, blc: "B", sna: "2", status: "reserved", lockExpiry: null },
+        ],
+      };
+      bookings.search
+        .mockResolvedValueOnce({ data: { offers: [offer2] } })
+        .mockResolvedValue({ data: { offers: [reservedOffer2] } });
       bookings.confirm.mockResolvedValue({ data: multiResult });
 
       const user = userEvent.setup();
@@ -280,7 +293,8 @@ expect(bookings.pending).toHaveBeenCalledWith({
 
       await user.click(screen.getByRole("button", { name: "Reserve" }));
       await fillPassenger(user);
-      await user.click(screen.getByRole("button", { name: "Confirm" }));
+      await user.click(screen.getByRole("button", { name: "Continue" }));
+      await user.click(screen.getByRole("button", { name: "Confirm booking" }));
 
       await screen.findByText("registration complete");
       expect(bookings.confirm).toHaveBeenCalledWith({
@@ -295,6 +309,10 @@ expect(bookings.pending).toHaveBeenCalledWith({
       expect(await screen.findByText("Confirm booking")).toBeInTheDocument();
       expect(screen.getByText("Pick a seat from the map to proceed.")).toBeInTheDocument();
       await waitFor(() => expect(bookings.search).toHaveBeenCalledTimes(3));
+
+      const bookedSeat = await screen.findByRole("button", { name: "Seat B1, reserved" });
+      expect(bookedSeat).toBeDisabled();
+      expect(screen.getByRole("button", { name: "Seat B2, reserved" })).toBeDisabled();
     },
     15000
   );

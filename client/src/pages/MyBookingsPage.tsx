@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { bookingsApi } from "../api/bookings";
+import { paymentsApi } from "../api/payments";
 import { serializeError } from "../api/client";
 import { fmtDate } from "../lib/date";
-import type { MyBooking, TicketStatus } from "../types";
+import type { BookingPayment, MyBooking, TicketStatus } from "../types";
 import Button from "../components/ui/Button";
 import Card from "../components/ui/Card";
 import ConfirmDialog from "../components/ui/ConfirmDialog";
@@ -33,8 +34,25 @@ const tabClass = (active: boolean) =>
     active ? "bg-brand-600 text-white" : "text-slate-600 hover:bg-slate-100"
   }`;
 
+const PAY_LABEL: Record<BookingPayment, string> = {
+  pending: "Pending",
+  paid: "Paid",
+  partial: "Partial",
+  refunded: "Refunded",
+  failed: "Failed",
+};
+
+const PAY_DOT: Record<BookingPayment, PillDot> = {
+  pending: "amber",
+  paid: "green",
+  partial: "amber",
+  refunded: "red",
+  failed: "red",
+};
+
 export default function MyBookingsPage() {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [tab, setTab] = useState<TicketStatus>("held");
   const [error, setError] = useState("");
   const [confirm, setConfirm] = useState<{ ref: string; ticketId?: string; label: string } | null>(null);
@@ -69,7 +87,54 @@ export default function MyBookingsPage() {
     },
   });
 
-  const busy = groupCancel.isPending || ticketCancel.isPending;
+  const payMutation = useMutation({
+    mutationFn: (ref: string) => paymentsApi.create({ bookingRef: ref }).then((res) => res.data),
+    onError: (err) => setError(serializeError(err)),
+  });
+
+  const reserveMutation = useMutation({
+    mutationFn: ({ ref, method }: { ref: string; method: "station" | "online" }) =>
+      bookingsApi.reserve(ref).then(async () => {
+        if (method !== "online") return null;
+        const init = await paymentsApi.create({ bookingRef: ref }).then((r) => r.data);
+        return {
+          transactionId: init.transactionId,
+          amount: init.amount,
+          gateway: init.gateway,
+        } as { transactionId: string; amount: number; gateway: string };
+      }),
+    onError: (err) => setError(serializeError(err)),
+  });
+
+  const handlePay = (booking: MyBooking) => {
+    setError("");
+    payMutation.mutate(booking.bookingRef, {
+      onSuccess: (init) => {
+        void navigate(`/pay/${init.transactionId}?amount=${init.amount}&gateway=${init.gateway}`);
+      },
+    });
+  };
+
+  const handleReserve = (booking: MyBooking, method: "station" | "online") => {
+    setError("");
+    reserveMutation.mutate(
+      { ref: booking.bookingRef, method },
+      {
+        onSuccess: (payment) => {
+          void queryClient.invalidateQueries({ queryKey: ["bookings"] });
+          if (payment) {
+            void navigate(`/pay/${payment.transactionId}?amount=${payment.amount}&gateway=${payment.gateway}`);
+          }
+        },
+      }
+    );
+  };
+
+  const busy =
+    groupCancel.isPending ||
+    ticketCancel.isPending ||
+    payMutation.isPending ||
+    reserveMutation.isPending;
   const shown = (bookings ?? []).filter((b) => b.status === tab);
 
   const counts = (key: TicketStatus) => (bookings ?? []).filter((b) => b.status === key).length;
@@ -124,6 +189,8 @@ export default function MyBookingsPage() {
               key={booking.bookingRef}
               booking={booking}
               busy={busy}
+              onPay={() => handlePay(booking)}
+              onReserve={(method) => handleReserve(booking, method)}
               onCancelGroup={() => setConfirm({ ref: booking.bookingRef, label: "booking" })}
               onCancelTicket={(seatLabel, ticketId) =>
                 setConfirm({ ref: booking.bookingRef, ticketId, label: `seat ${seatLabel}` })
@@ -153,16 +220,25 @@ export default function MyBookingsPage() {
 function BookingCard({
   booking,
   busy,
+  onPay,
+  onReserve,
   onCancelGroup,
   onCancelTicket,
 }: {
   booking: MyBooking;
   busy: boolean;
+  onPay: () => void;
+  onReserve: (method: "station" | "online") => void;
   onCancelGroup: () => void;
   onCancelTicket: (seatLabel: string, ticketId: string) => void;
 }) {
+  const [reserving, setReserving] = useState(false);
+  const [method, setMethod] = useState<"station" | "online">("station");
   const cancelled = booking.status === "cancelled";
+  const held = booking.status === "held";
   const seatsLabel = booking.seats.map((s) => `${s.blc}${s.sna}`).join(", ");
+  const canPay = !cancelled && booking.seats.length > 0 && booking.payment === "pending" && !held;
+  const reservable = held && booking.seats.length > 0;
 
   return (
     <Card panel pad="5">
@@ -179,7 +255,7 @@ function BookingCard({
         <div className="text-right">
           <Pill dot={STATUS_DOT[booking.status]}>{STATUS_LABEL[booking.status]}</Pill>
           <div className="mt-1 text-xl font-bold text-slate-900">Rs {booking.totalPrice}</div>
-          <div className="text-xs text-slate-500">Payment: {booking.payment}</div>
+          <Pill dot={PAY_DOT[booking.payment]}>{PAY_LABEL[booking.payment]}</Pill>
         </div>
       </div>
 
@@ -237,10 +313,79 @@ function BookingCard({
       </div>
 
       {!cancelled && (
-        <div className="mt-3 flex justify-end border-t border-slate-100 pt-3">
-          <Button variant="danger" size="sm" disabled={busy} onClick={onCancelGroup}>
-            Cancel booking
-          </Button>
+        <div className="mt-3 flex flex-col items-end gap-2 border-t border-slate-100 pt-3">
+          {reservable && (
+            <div className="w-full rounded-card border border-amber-300 bg-amber-50 p-3">
+              <p className="text-xs leading-relaxed text-slate-600">
+                These seats are on hold — reserve them as soon as possible or they will be
+                released and you could lose them.
+              </p>
+              {reserving ? (
+                <>
+                  <div className="mt-3 space-y-2">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-card border border-brand-200 bg-white px-3 py-2 text-sm hover:bg-brand-50">
+                      <input
+                        type="radio"
+                        name={`method-${booking.bookingRef}`}
+                        checked={method === "station"}
+                        onChange={() => setMethod("station")}
+                        className="mt-1 accent-brand-600"
+                      />
+                      <span>
+                        <span className="font-semibold text-slate-800">Pay at station</span>
+                        <span className="block text-xs text-slate-500">
+                          Seats become reserved now; pay cash at the counter later.
+                        </span>
+                      </span>
+                    </label>
+                    <label className="flex cursor-pointer items-start gap-2 rounded-card border border-brand-200 bg-white px-3 py-2 text-sm hover:bg-brand-50">
+                      <input
+                        type="radio"
+                        name={`method-${booking.bookingRef}`}
+                        checked={method === "online"}
+                        onChange={() => setMethod("online")}
+                        className="mt-1 accent-brand-600"
+                      />
+                      <span>
+                        <span className="font-semibold text-slate-800">Pay online</span>
+                        <span className="block text-xs text-slate-500">
+                          Reserve now and pay through the online gateway right away.
+                        </span>
+                      </span>
+                    </label>
+                  </div>
+                  <div className="mt-3 flex justify-end gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy}
+                      onClick={() => onReserve(method)}
+                    >
+                      {method === "online" ? "Reserve & pay online" : "Reserve seat"}
+                    </Button>
+                    <Button size="sm" variant="secondary" disabled={busy} onClick={() => setReserving(false)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <div className="mt-2 flex justify-end">
+                  <Button size="sm" disabled={busy} onClick={() => setReserving(true)}>
+                    Reserve seat
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex gap-2">
+            {canPay && (
+              <Button variant="secondary" size="sm" disabled={busy} onClick={onPay}>
+                Pay now
+              </Button>
+            )}
+            <Button variant="danger" size="sm" disabled={busy} onClick={onCancelGroup}>
+              Cancel booking
+            </Button>
+          </div>
         </div>
       )}
     </Card>

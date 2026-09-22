@@ -5,6 +5,7 @@ import User from '../models/User.js';
 import { config } from '../config/env.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { signAccessToken, signRefreshToken, refreshCookieOptions } from '../middleware/auth.js';
+import { sendResetPasswordEmail } from '../utils/mailer.js';
 
 const todayParts = () => {
   const d = new Date();
@@ -151,7 +152,15 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   await user.save();
 
   const resetUrl = `${config.clientOrigin}/reset-password/${rawToken}`;
-  console.log('\n[FORGOT-PASSWORD] Reset link for', user.uemail, ':', resetUrl, '\n');
+  try {
+    await sendResetPasswordEmail({
+      to: user.uemail,
+      uname: user.uname,
+      resetUrl,
+    });
+  } catch (err) {
+    console.error(`[mail] failed to send reset link to ${user.uemail}:`, err.message);
+  }
 
   res.json({ message: 'If the email exists, a reset link has been sent' });
 });

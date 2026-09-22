@@ -20,6 +20,14 @@ export default function TicketDisplay({
       : result.ticket.tstatus === "cancelled"
         ? "Cancelled"
         : "On-hold";
+  const paymentLabel =
+    result.ticket.paymentStatus === "paid"
+      ? "Paid"
+      : result.ticket.paymentStatus === "refunded"
+        ? "Refunded"
+        : result.ticket.paymentStatus === "failed"
+          ? "Failed"
+          : "Pending";
   const rows: [string, string][] = [
     ["Name", result.ticket.treby],
     ["Ticket code", result.ticket._id],
@@ -31,7 +39,7 @@ export default function TicketDisplay({
     ["Seats", seatsLabel],
     ["Total price", `Rs ${result.price}`],
     ["Seat status", statusLabel],
-    ["Payment", result.ticket.payment],
+    ["Payment", paymentLabel],
   ];
   return (
     <div className="mx-auto max-w-sm rounded-panel border border-slate-200 bg-white p-6">
