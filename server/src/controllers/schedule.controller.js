@@ -2,6 +2,7 @@ import BusSchedule from '../models/BusSchedule.js';
 import ScheduleRoute from '../models/ScheduleRoute.js';
 import Sales from '../models/Sales.js';
 import Bus from '../models/Bus.js';
+import { issueScheduleNo } from '../utils/counter.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 
 const DAY = 86400000;
@@ -94,6 +95,7 @@ export const createSchedule = asyncHandler(async (req, res) => {
     trtime,
     bsstatus: 'pending',
     bssapby: 'none',
+    schedNo: await issueScheduleNo(),
   });
 
   res.status(201).json({ schedule });

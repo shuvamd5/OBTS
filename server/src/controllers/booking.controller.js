@@ -12,6 +12,7 @@ import { seatAt, seatRows } from '../domain/seatmap.js';
 import { AppError, asyncHandler } from '../middleware/errorHandler.js';
 import { runInTransaction } from '../utils/tx.js';
 import { computeArrival } from '../utils/routeDuration.js';
+import { buildBookingId } from '../utils/counter.js';
 
 const DAY = 86400000;
 const HOLD_MS = 10 * 60 * 1000; // 10 min seat lock
@@ -314,6 +315,8 @@ const createBooking = async (req, res, action) => {
   const seatStatus = action === 'confirm' ? 'reserved' : 'held';
   const ticketStatus = action === 'confirm' ? 'reserved' : 'held';
   const bookingRef = new Types.ObjectId();
+  if (!schedule.schedNo) throw new AppError(500, 'Schedule has no assigned number');
+  const bookingId = await buildBookingId(schedule.schedNo);
   const { tickets, seats, payments } = await runInTransaction(async (session) => {
     const s = session ? { session } : {};
 
@@ -362,7 +365,9 @@ const createBooking = async (req, res, action) => {
         sna: seatDefs[i].sna,
         price: seg.price,
         uid: req.user._id,
-        treby: req.user.uname,
+        bookedBy: req.user._id,
+        bookedByName: req.user.uname,
+        bookingId,
         tstatus: ticketStatus,
         paymentStatus: 'pending',
         pyreby: 'none',
@@ -408,7 +413,9 @@ const createBooking = async (req, res, action) => {
         sna: t.sna,
         price: t.price,
         uid: t.uid,
-        treby: t.treby,
+        bookedBy: t.bookedBy,
+        bookedByName: t.bookedByName,
+        bookingId: t.bookingId,
         tstatus: t.tstatus,
         paymentStatus: t.paymentStatus,
         pyreby: t.pyreby,
@@ -443,6 +450,7 @@ const createBooking = async (req, res, action) => {
     },
     price: seg.price * snos.length,
     bookingRef,
+    bookingId,
     passenger,
   });
 };
@@ -527,6 +535,7 @@ const groupBookings = (tickets) => {
     const totalPrice = group.reduce((sum, t) => sum + (t.price ?? 0), 0);
     return {
       bookingRef: String(first.bookingRef ?? first._id),
+      bookingId: first.bookingId ?? null,
       arid: first.arid,
       trdate: first.trdate,
       trtime: first.trtime,
@@ -551,7 +560,9 @@ const groupBookings = (tickets) => {
 
 // GET /api/bookings/my — owner's bookings grouped by bookingRef for tabs.
 export const listMyBookings = asyncHandler(async (req, res) => {
-  const tickets = await Ticket.find({ uid: req.user._id }).sort({ trdate: -1 }).lean();
+  const tickets = await Ticket.find({ uid: req.user._id, deletedAt: null })
+    .sort({ trdate: -1 })
+    .lean();
   const enriched = await attachBookingDetails(tickets);
   const bookings = groupBookings(enriched).sort(
     (a, b) => new Date(b.trdate) - new Date(a.trdate) || a.trtime.localeCompare(b.trtime)
@@ -562,7 +573,9 @@ export const listMyBookings = asyncHandler(async (req, res) => {
 // GET /api/bookings/:id — a single owner booking group (bookingRef).
 export const getBookingById = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
-  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id }).sort({ sno: 1 }).lean();
+  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id, deletedAt: null })
+    .sort({ sno: 1 })
+    .lean();
   if (tickets.length === 0) throw new AppError(404, 'Booking not found');
   const enriched = await attachBookingDetails(tickets);
   res.json({ booking: groupBookings(enriched)[0] });
@@ -626,7 +639,7 @@ export const cancelBookingTicket = asyncHandler(async (req, res) => {
 // skipped — the user must rebook if the seats were already released.
 export const reserveBooking = asyncHandler(async (req, res) => {
   const { id } = req.validated.params;
-  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id, tstatus: 'held' }).lean();
+  const tickets = await Ticket.find({ bookingRef: id, uid: req.user._id, tstatus: 'held', deletedAt: null }).lean();
   if (tickets.length === 0) throw new AppError(400, 'No held tickets to reserve');
 
   const count = await runInTransaction(async (session) => {

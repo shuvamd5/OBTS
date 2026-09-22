@@ -9,12 +9,14 @@ const busScheduleSchema = new mongoose.Schema(
     trtime: { type: String, required: true },
     bsstatus: { type: String, enum: SCHEDULE_STATUSES, default: 'pending' },
     bssapby: { type: String, default: 'none' },
+    schedNo: { type: Number, default: null, index: true },
     deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
 busScheduleSchema.index({ bid: 1, trdate: 1 });
+busScheduleSchema.index({ schedNo: 1 }, { unique: true, sparse: true });
 
 const BusSchedule = mongoose.model('BusSchedule', busScheduleSchema);
 

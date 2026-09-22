@@ -5,6 +5,7 @@ import { backfillRouteFields } from '../utils/backfillRouteFields.js';
 import { backfillRouteDuration } from '../utils/backfillRouteDuration.js';
 import { backfillScheduleStatuses } from '../utils/backfillScheduleStatuses.js';
 import { backfillPaymentStatus, backfillPaidPayments } from '../utils/backfillPaymentStatus.js';
+import { backfillScheduleNos } from '../utils/backfillScheduleNos.js';
 
 export async function connectDB() {
   mongoose.connection.on('connected', () => {
@@ -20,6 +21,7 @@ export async function connectDB() {
   await backfillRouteFields();
   await backfillRouteDuration();
   await backfillScheduleStatuses();
+  await backfillScheduleNos();
   await backfillPaymentStatus();
   await backfillPaidPayments();
   return mongoose.connection;

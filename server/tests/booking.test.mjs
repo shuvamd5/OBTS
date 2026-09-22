@@ -634,9 +634,9 @@ try {
 
   r = await request(app).get('/api/bookings/passengers').set(auth(adminToken));
   assert.equal(r.status, 200, JSON.stringify(r.body));
-  const withRows = r.body.schedules.find((s) => s.tickets.length > 0);
-  assert.ok(withRows, 'admin passengers includes ticket rows');
-  const paxRow = withRows.tickets.find((t) => t.passengerName);
+  const bookSched = r.body.schedules.find((s) => s.bus?.bname === 'Book Bus');
+  assert.ok(bookSched, 'admin passengers lists the Book Bus schedule');
+  const paxRow = bookSched.tickets.find((t) => t.passengerName);
   assert.ok(paxRow, 'passenger row carries name');
   assert.equal(paxRow.passengerPhone, '9800000000');
   assert.equal(paxRow.bus.bname, 'Book Bus');

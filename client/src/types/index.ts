@@ -196,7 +196,9 @@ export interface BookingTicket {
   sna: string;
   price: number;
   uid: string;
-  treby: string;
+  bookingId?: string | null;
+  bookedBy?: string | null;
+  bookedByName?: string;
   tstatus: TicketStatus;
   paymentStatus: PaymentStatus;
   paymentId?: string;
@@ -235,6 +237,7 @@ export interface BookingResult {
   };
   price: number;
   bookingRef?: string;
+  bookingId?: string;
   passenger?: PassengerInput;
 }
 
@@ -261,6 +264,7 @@ export interface MyBookingTicket extends BookingTicket {
 
 export interface MyBooking {
   bookingRef: string;
+  bookingId?: string | null;
   arid: string;
   trdate: string;
   trtime: string;

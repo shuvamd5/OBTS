@@ -29,8 +29,8 @@ export default function TicketDisplay({
           ? "Failed"
           : "Pending";
   const rows: [string, string][] = [
-    ["Name", result.ticket.treby],
-    ["Ticket code", result.ticket._id],
+    ["Passenger", result.ticket.passengerName || result.ticket.bookedByName || "—"],
+    ["Booking id", result.bookingId || result.ticket.bookingId || result.ticket._id],
     ["Bus name", result.bus.bname],
     ["Plate number", result.bus.plateNumber],
     ["Bus type", result.bus.busType?.name ?? "—"],
